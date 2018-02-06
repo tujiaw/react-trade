@@ -1,5 +1,5 @@
 import React, { Component } from 'react'
-import { startWebSocket, loginBus, loginTrader, subAccount } from './databus'
+import { startWebSocket, loginBus, loginTrader, subscribeList } from './databus'
 
 
 class App extends Component {
@@ -37,7 +37,7 @@ class App extends Component {
   }
 
   onSubAccount = () => {
-    subAccount();
+    subscribeList(['Trade.TradingAccount'])
   }
 
   onClearResult = () => {

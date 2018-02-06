@@ -2,12 +2,6 @@ var databus = require('./databus')
 var { AppList } = require('./Command')
 var ByteBuffer = require('bytebuffer')
 
-const Cons = {
-	COMMAND_DATABUS_HEART_BEAT: (0 << 20) | 5,
-	COMMAND_DATABUS_SUBSCRIBE: (0 << 20) | 14,
-	TOPIC_TRADE_TRADINGACCOUNT: (888 << 20) | 20,
-	LOGIN_RSP: (888 << 20) | 1,
-}
 export const heartBeat = (function() {
 	let timerid
 	return {
@@ -21,8 +15,10 @@ export const heartBeat = (function() {
 	}
 }())
 
+// 根据proto获取command值
 const commandCache = {}
 function getCommandValue(proto_request, proto_response) {
+	proto_response = proto_response || 'MsgExpress.CommonResponse'
 	const proto_str = proto_request + '-' + proto_response 
 	if (commandCache[proto_str]) {
 		return commandCache[proto_str]
@@ -50,39 +46,73 @@ function getCommandValue(proto_request, proto_response) {
 	return -1
 }
 
+// 解析推送的消息
+export function parsePublishMessage(protoFilename, jsonContent) {
+	return new Promise((resolve, reject) => {
+		if (jsonContent.length < 2) {
+			return reject('json content error')
+		}
+
+		const name = jsonContent[0].value
+		const content = jsonContent[1].value
+		const arr = content.split(',')
+		var bb = new Uint8Array(arr.length)
+			for (let i = 0, count = arr.length; i < count; i++) {
+				bb[i] = arr[i]
+			}
+		
+			databus.buildProtoObject(protoFilename, name)
+			.then((Msg) => {
+				try {
+					const decodedMsg = Msg.decode(bb)
+					return resolve(decodedMsg)
+				} catch (e) {
+					return reject(e)
+				}
+			})
+	})
+}
+
 /**
  *  批量订阅
  * @param {[number]} subList 
  * @param {[number]} topicList 
  */
 let subIdStart = 123
-function subscribeList(subProtoNameList) {
+export function subscribeList(publishProtoRequestList) {
   return databus.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
 		let objList = []
-		for (let i = 0, count = subProtoNameList.length; i < count; i++) {
-			//getCommandValue()
-      let newObj = {...obj}
-      newObj.subid = subIdStart++
-      newObj.topic = subProtoNameList[i]
-      objList.push(newObj)
+		for (let i = 0, count = publishProtoRequestList.length; i < count; i++) {
+			const cmd = getCommandValue(publishProtoRequestList[i])
+			if (cmd >= 0) {
+				let newObj = {...obj}
+				newObj.subid = subIdStart++
+				newObj.topic = cmd
+				objList.push(newObj)
+
+				databus.requestPublishData(cmd, dispatchPublishMessage)
+			}
 		}
     return Promise.resolve(objList)
   }).then((objList) => {
-    databus.requestOnce(Cons.COMMAND_DATABUS_SUBSCRIBE, "msgexpress", "MsgExpress.ComplexSubscribeData", "MsgExpress.CommonResponse", {
-      fillRequest: function (request) {
-        console.log(" - Send ComplexSubscribeData Request");
-        request.sub = objList;
-      },
-      handleResponse: function (response) {
-        console.log(" - Receive ComplexSubscribeData, retCode:" + response.retcode);
-        if (response && response.retcode === 0) {
-          return Promise.resolve()
-        } else {
-          return Promise.reject(response)
-        }
+		return protoRequest("msgexpress", "MsgExpress.ComplexSubscribeData", "MsgExpress.CommonResponse", {
+			sub: objList
+		}).then((response) => {
+			if (response && response.retcode === 0) {
+				return Promise.resolve()
+			} else {
+				return Promise.reject(response)
 			}
-		});
+		})
   })
+}
+
+function dispatchPublishMessage(jsonContent) {
+	parsePublishMessage('trade', jsonContent).then((obj) => {
+		console.log(obj)
+	}).catch((err) => {
+		console.log(err)
+	})
 }
 
 /**
@@ -93,7 +123,7 @@ export function startWebSocket(wsip, wsport, path) {
       databus.connect(wsip, wsport, path || '', {
 				onConnectSuccess: function() {
 					databus.setPushDataFactory(function(topic, jsonContent) {
-						parsePublishData(topic, jsonContent);
+						databus.notifyPublishData(topic, jsonContent);
 					});
 					heartBeat.start()
 					return resolve();
@@ -113,15 +143,6 @@ export function startWebSocket(wsip, wsport, path) {
  */
 export function closeWebSocket() {
   databus.close();
-}
-
-function parsePublishData(topic, jsonContent) {
-	if (topic === Cons.TOPIC_HEARTBEAT 
-		|| topic === Cons.TOPIC_TRADE_TRADINGACCOUNT
-		|| topic === Cons.LOGIN_RSP
-	) {
-			databus.notifyPublishData(topic, jsonContent);
-	}
 }
 
 export function protoRequest(protoFileName, protoRequest, protoResponse, requestObj) {
@@ -163,38 +184,6 @@ export function loginBus() {
 	})
 }
 
-// 解析推送的消息
-export function parsePublishMessage(protoFilename, jsonContent) {
-	return new Promise((resolve, reject) => {
-		if (jsonContent.length < 2) {
-			return reject('json content error')
-		}
-
-		const name = jsonContent[0].value
-		const content = jsonContent[1].value
-		const arr = content.split(',')
-		var bb = new Uint8Array(arr.length)
-			for (let i = 0, count = arr.length; i < count; i++) {
-				bb[i] = arr[i]
-			}
-		
-			databus.buildProtoObject(protoFilename, name)
-			.then((Msg) => {
-				try {
-					const decodedMsg = Msg.decode(bb)
-					return resolve(decodedMsg)
-				} catch (e) {
-					console.error(e)
-					return reject(e)
-				}
-			})
-	})
-}
-
-export function subscribeInit(protoRequest, protoResponse) {
-
-}
-
 /////////////////////////////////////////////////////////////////
 export function loginTrader(username, password, codeList) {
 	return protoRequest('trade', 'Trade.LoginReq', 'Trade.LoginResp', {
@@ -204,11 +193,7 @@ export function loginTrader(username, password, codeList) {
 	})
 }
 
-export function subAccount() {
-	// databus.requestPublishData(Cons.TOPIC_TRADE_TRADINGACCOUNT, dispatchPublishTradingAccount)
-	// return subscribeList([123], [Cons.TOPIC_TRADE_TRADINGACCOUNT])
-}
-
-function dispatchPublishTradingAccount(jsonContent) {
-	parsePublishMessage('trade', jsonContent)
-}
+// export function subAccount() {
+// 	// databus.requestPublishData(Cons.TOPIC_TRADE_TRADINGACCOUNT, dispatchPublishTradingAccount)
+// 	// return subscribeList([123], [Cons.TOPIC_TRADE_TRADINGACCOUNT])
+// }
