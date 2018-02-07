@@ -32,7 +32,7 @@ function getCommandFromProto(proto_request, proto_response) {
 			}
 		}
 	}
-	return -1
+	return null
 }
 
 // 根据command获取proto名字
@@ -73,7 +73,8 @@ function getProtoFilename(proto) {
 		if (file.package === prefix) {
 			return file.filename
 		}
-	}
+  }
+  console.error('get proto filename error, proto:' + proto)
 	return ''
 }
 
@@ -194,7 +195,7 @@ class AppClient {
       let objList = []
       for (let i = 0, count = protoList.length; i < count; i++) {
         const cmd = getCommandFromProto(protoList[i])
-        if (cmd >= 0) {
+        if (cmd) {
           let newObj = {...obj}
           newObj.subid = self._subIdStart++
           newObj.topic = cmd
@@ -207,6 +208,7 @@ class AppClient {
         sub: objList
       }).then((response) => {
         if (response && response.retcode === 0) {
+          console.log('subscribe success')
           return Promise.resolve()
         } else {
           return Promise.reject(response)
@@ -232,7 +234,7 @@ class AppClient {
     const self = this
 		return new Promise((resolve, reject) => {
 			const cmd = getCommandFromProto(protoRequest, protoResponse)
-			if (cmd < 0) {
+			if (!cmd) {
 				console.error('command error, request:' + protoRequest + ', response:' + protoResponse)
 				return reject()
 			}
@@ -270,6 +272,7 @@ class AppClient {
         console.log(err)
       })
     }, this._hearBeatIntervalSecond * 1000)
+    console.log(this._heartBeatTimer)
   }
   
   // 关闭心跳
