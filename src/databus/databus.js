@@ -222,6 +222,8 @@
             }
             if (ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(pack.toArrayBuffer());
+            } else if (callback.handlerError) {
+                callback.handlerError('disconnect')
             }
         },
         setPushDataFactory: function (factory) {

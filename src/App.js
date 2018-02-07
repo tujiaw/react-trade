@@ -1,6 +1,5 @@
 import React, { Component } from 'react'
-import { startWebSocket, loginBus, loginTrader, subscribeList } from './databus'
-
+import appClient from './databus'
 
 class App extends Component {
   state = {
@@ -9,11 +8,10 @@ class App extends Component {
   }
 
   onLoginBus = () => {
-    startWebSocket('47.100.7.224', '55555')
-    //startWebSocket('192.168.1.80', '55555')
+    appClient.open('47.100.7.224', '55555')
     .then(() => {
       console.log('start web socket ok')
-      return loginBus()
+      return appClient.loginBus('trader')
     })
     .then((json) => {
       const ls = [...this.state.result]
@@ -26,7 +24,11 @@ class App extends Component {
   }
 
   onLoginTrader = () => {
-    loginTrader('admin', 'admin', ['IC1802', 'IF1802', 'IH1802', 'i1805'])
+    appClient.post('Trade.LoginReq', 'Trade.LoginResp', {
+      userid: 'admin',
+      passwd: 'admin',
+      instruments: ['IC1802', 'IF1802', 'IH1802', 'i1805']
+    })
     .then((json) => {
       const ls = [...this.state.result]
       ls.push(JSON.stringify(json))
@@ -38,7 +40,13 @@ class App extends Component {
   }
 
   onSubAccount = () => {
-    subscribeList(['Trade.TradingAccount'])
+    appClient.subscribe(['Trade.TradingAccount'], (name, content) => {
+      if (name === 'Trade.TradingAccount') {
+        const ls = [...this.state.result]
+        ls.push(JSON.stringify(content))
+        this.setState({ result: ls })
+      }
+    })
   }
 
   onClearResult = () => {

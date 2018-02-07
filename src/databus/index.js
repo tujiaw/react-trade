@@ -1,19 +1,8 @@
-var databus = require('./databus')
-var { AppList } = require('./Command')
-var ByteBuffer = require('bytebuffer')
+import { setInterval, clearInterval } from 'timers';
 
-export const heartBeat = (function() {
-	let timerid
-	return {
-		start: function() {
-			this.stop()
-			timerid = setInterval(sendHeartBeat, 50000)
-		},
-		stop: function() {
-			clearInterval(timerid)
-		}
-	}
-}())
+var databus = require('./databus')
+var { AppList, FileList } = require('./Command')
+var ByteBuffer = require('bytebuffer')
 
 // 根据proto获取command值
 const commandCache = {}
@@ -46,6 +35,7 @@ function getCommandFromProto(proto_request, proto_response) {
 	return -1
 }
 
+// 根据command获取proto名字
 function getProtoFromCommand(cmd) {
 	const appId = cmd >> 20
 	const funcId = (cmd - ((cmd >> 20) << 20))
@@ -76,66 +66,43 @@ function getProtoFromCommand(cmd) {
 	return null
 }
 
-// 解析推送的消息
-export function parsePublishMessage(protoFilename, jsonContent) {
-	return new Promise((resolve, reject) => {
-		if (jsonContent.length < 2) {
-			return reject('json content error')
+// 获取proto的文件名
+function getProtoFilename(proto) {
+	const prefix = proto.substring(0, proto.indexOf('.'))
+	for (let file of FileList) {
+		if (file.package === prefix) {
+			return file.filename
 		}
+	}
+	return ''
+}
 
-		const name = jsonContent[0].value
-		const content = jsonContent[1].value
-		const arr = content.split(',')
-		var bb = new Uint8Array(arr.length)
-			for (let i = 0, count = arr.length; i < count; i++) {
-				bb[i] = arr[i]
-			}
+// 解析推送的消息，老协议
+// export function parsePublishMessage(protoFilename, jsonContent) {
+// 	return new Promise((resolve, reject) => {
+// 		if (jsonContent.length < 2) {
+// 			return reject('json content error')
+// 		}
+
+// 		const name = jsonContent[0].value
+// 		const content = jsonContent[1].value
+// 		const arr = content.split(',')
+// 		var bb = new Uint8Array(arr.length)
+// 			for (let i = 0, count = arr.length; i < count; i++) {
+// 				bb[i] = arr[i]
+// 			}
 		
-			databus.buildProtoObject(protoFilename, name)
-			.then((Msg) => {
-				try {
-					const decodedMsg = Msg.decode(bb)
-					return resolve(decodedMsg)
-				} catch (e) {
-					return reject(e)
-				}
-			})
-	})
-}
-
-/**
- *  批量订阅
- * @param {[number]} subList 
- * @param {[number]} topicList 
- */
-let subIdStart = 123
-export function subscribeList(publishProtoRequestList) {
-  return databus.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
-		let objList = []
-		for (let i = 0, count = publishProtoRequestList.length; i < count; i++) {
-			const cmd = getCommandFromProto(publishProtoRequestList[i])
-			if (cmd >= 0) {
-				let newObj = {...obj}
-				newObj.subid = subIdStart++
-				newObj.topic = cmd
-				objList.push(newObj)
-
-				// databus.requestPublishData(cmd, dispatchPublishMessage)
-			}
-		}
-    return Promise.resolve(objList)
-  }).then((objList) => {
-		return protoRequest("msgexpress", "MsgExpress.ComplexSubscribeData", "MsgExpress.CommonResponse", {
-			sub: objList
-		}).then((response) => {
-			if (response && response.retcode === 0) {
-				return Promise.resolve()
-			} else {
-				return Promise.reject(response)
-			}
-		})
-  })
-}
+// 			databus.buildProtoObject(protoFilename, name)
+// 			.then((Msg) => {
+// 				try {
+// 					const decodedMsg = Msg.decode(bb)
+// 					return resolve(decodedMsg)
+// 				} catch (e) {
+// 					return reject(e)
+// 				}
+// 			})
+// 	})
+// }
 
 function dispatchPublishMessage(topic, content) {
 		const proto = getProtoFromCommand(topic)
@@ -144,96 +111,164 @@ function dispatchPublishMessage(topic, content) {
 			return
 		}
 	
-		return databus.buildProtoObject('trade', proto.request)
+		return databus.buildProtoObject(getProtoFilename(proto.request), proto.request)
 		.then((Msg) => {
 			try {
 				const decodedMsg = Msg.decode(content)
-				console.log(decodedMsg)
+				appClient.onPublishCallback(proto.request, decodedMsg)
 			} catch (e) {
 				console.error(e)
 			}
 		})
 }
 
-/**
- * websocket连接
- */
-export function startWebSocket(wsip, wsport, path) {
-  return new Promise((resolve, reject) => {
-      databus.connect(wsip, wsport, path || '', {
-				onConnectSuccess: function() {
-					databus.setPushDataFactory(function(topic, content) {
-						dispatchPublishMessage(topic, content)
-					});
-					heartBeat.start()
-					return resolve();
-				},
-				onConnectError: function() {
-					return reject()
-				},
-				onConnectClose: function() {
-					return reject()
-				}
-    })
-  })
-}
+class AppClient {
+  constructor() {
+    this._publishCallback = null
+    this._subIdStart = 123
+    this._heartBeatTimer = 0
+    this._clientName = 'test'
+    this._hearBeatIntervalSecond = 5 // 心跳间隔5秒
+    this._isConnect = false
+  }
 
-/**
- * 关闭websocket连接
- */
-export function closeWebSocket() {
-  databus.close();
-}
+  setClientName(name) {
+    this._clientName = name
+  }
 
-export function protoRequest(protoFileName, protoRequest, protoResponse, requestObj) {
-	return new Promise((resolve, reject) => {
-		const cmd = getCommandFromProto(protoRequest, protoResponse)
-		if (cmd < 0) {
-			console.error('command error, request:' + protoRequest + ', response:' + protoResponse)
-			return reject()
-		}
-		databus.requestOnce(cmd, protoFileName, protoRequest, protoResponse, {
-			fillRequest: function(request) {
-				Object.assign(request, requestObj)
-			},
-			handleResponse: function(response) {
-				return resolve(response)
-			}
+  setHeartBeatIntervalSecond(second) {
+    this._hearBeatIntervalSecond = second
+  }
+
+	// 初始化连接
+	open(wsip, wsport, wspath) {
+    const self = this
+		return new Promise((resolve, reject) => {
+			databus.connect(wsip, wsport, wspath || '', {
+					  onConnectSuccess: function() {
+						  databus.setPushDataFactory(function(topic, content) {
+							  dispatchPublishMessage(topic, content)
+              });
+              self._isConnect = true
+              self.loginBus()
+              self.startHeartBeat()
+						  return resolve();
+					  },
+					  onConnectError: function() {
+						  return reject()
+					  },
+					  onConnectClose: function() {
+						  return reject()
+					  }
+		  })
 		})
-	})
+	}
+
+	close() {
+		databus.close();
+	}
+
+	// 登录总线，连接成功后会默认登录
+	loginBus() {
+    const self = this
+		return this.post('MsgExpress.LoginInfo', 'MsgExpress.LoginResponse', {
+			type: 1, 
+			name: self._clientName,
+			group: 1, 
+			uuid: 'rywyetyu24535', 
+			starttime: 0, 
+			auth: 'test'
+		})
+	}
+
+	subscribe(protoList, publishCallback) {
+    const self = this
+    this._publishCallback = publishCallback
+    return databus.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
+      let objList = []
+      for (let i = 0, count = protoList.length; i < count; i++) {
+        const cmd = getCommandFromProto(protoList[i])
+        if (cmd >= 0) {
+          let newObj = {...obj}
+          newObj.subid = self._subIdStart++
+          newObj.topic = cmd
+          objList.push(newObj)
+        }
+      }
+      return Promise.resolve(objList)
+    }).then((objList) => {
+      return self.post("MsgExpress.ComplexSubscribeData", "MsgExpress.CommonResponse", {
+        sub: objList
+      }).then((response) => {
+        if (response && response.retcode === 0) {
+          return Promise.resolve()
+        } else {
+          return Promise.reject(response)
+        }
+      })
+    })
+  }
+  
+  // 回调推送的消息
+  onPublishCallback(name, msg) {
+    if (this._publishCallback) {
+      this._publishCallback(name, msg)
+    }
+  }
+
+	// 发送消息
+	post(protoRequest, protoResponse, requestObj) {
+    const self = this
+		return new Promise((resolve, reject) => {
+			const cmd = getCommandFromProto(protoRequest, protoResponse)
+			if (cmd < 0) {
+				console.error('command error, request:' + protoRequest + ', response:' + protoResponse)
+				return reject()
+			}
+			databus.requestOnce(cmd, getProtoFilename(protoRequest), protoRequest, protoResponse, {
+				fillRequest: function(request) {
+					Object.assign(request, requestObj)
+				},
+				handleResponse: function(response) {
+					return resolve(response)
+        },
+        handlerError: function(err) {
+          if (err === 'disconnect') {
+            self._isConnect = false
+          } else {
+            console.error(err)
+          }
+        }
+			})
+		})
+  }
+
+  // 开启心跳
+	startHeartBeat() {
+    this.closeHeartBeat()
+    this._heartBeatTimer = setInterval(() => {
+      if (!this._isConnect) {
+        databus.reconnect()
+        return
+      }
+      
+      this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", {
+        cpu: 0, topmemory: 0, memory: 0, sendqueue: 0, receivequeue: 0
+      }).then((msg) => {
+        console.log(msg)
+      }).catch((err) => {
+        console.log(err)
+      })
+    }, this._hearBeatIntervalSecond * 1000)
+  }
+  
+  // 关闭心跳
+  closeHeartBeat() {
+    if (this._heartBeatTimer) {
+      clearInterval(this._heartBeatTimer)
+    }
+  }
 }
 
-/**
- * 发送心跳包
- */
-function sendHeartBeat() {
-	return protoRequest("msgexpress", "MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", {
-		cpu: 0, topmemory: 0, memory: 0, sendqueue: 0, receivequeue: 0
-	})
-}
-
-// 登录总线
-export function loginBus() {
-	return protoRequest('msgexpress', 'MsgExpress.LoginInfo', 'MsgExpress.LoginResponse', {
-		type: 1, 
-		name: 'trade', 
-		group: 1, 
-		uuid: 'rywyetyu24535', 
-		starttime: 0, 
-		auth: 'test'
-	})
-}
-
-/////////////////////////////////////////////////////////////////
-export function loginTrader(username, password, codeList) {
-	return protoRequest('trade', 'Trade.LoginReq', 'Trade.LoginResp', {
-		userid: username,
-		passwd: password,
-		instruments: codeList
-	})
-}
-
-// export function subAccount() {
-// 	// databus.requestPublishData(Cons.TOPIC_TRADE_TRADINGACCOUNT, dispatchPublishTradingAccount)
-// 	// return subscribeList([123], [Cons.TOPIC_TRADE_TRADINGACCOUNT])
-// }
+const appClient = new AppClient()
+export default appClient
