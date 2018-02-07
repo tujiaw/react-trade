@@ -105,21 +105,21 @@ function getProtoFilename(proto) {
 // }
 
 function dispatchPublishMessage(topic, content) {
-		const proto = getProtoFromCommand(topic)
-		if (!proto) {
-			console.log('get proto from command failed, topic:', topic)
-			return
-		}
-	
-		return databus.buildProtoObject(getProtoFilename(proto.request), proto.request)
-		.then((Msg) => {
-			try {
-				const decodedMsg = Msg.decode(content)
-				appClient.onPublishCallback(proto.request, decodedMsg)
-			} catch (e) {
-				console.error(e)
-			}
-		})
+  const proto = getProtoFromCommand(topic)
+  if (!proto || !content || !content.length) {
+    console.log('get proto from command failed, topic:' + topic + ',content:' + content)
+    return
+  }
+
+  return databus.buildProtoObject(getProtoFilename(proto.request), proto.request)
+  .then((Msg) => {
+    try {
+      const decodedMsg = Msg.decode(content)
+      appClient.onPublishCallback(proto.request, decodedMsg)
+    } catch (e) {
+      console.error(e)
+    }
+  }) 
 }
 
 class AppClient {
@@ -130,6 +130,7 @@ class AppClient {
     this._clientName = 'test'
     this._hearBeatIntervalSecond = 5 // 心跳间隔5秒
     this._isConnect = false
+    this._addr = 0
   }
 
   setClientName(name) {
@@ -145,21 +146,25 @@ class AppClient {
     const self = this
 		return new Promise((resolve, reject) => {
 			databus.connect(wsip, wsport, wspath || '', {
-					  onConnectSuccess: function() {
-						  databus.setPushDataFactory(function(topic, content) {
-							  dispatchPublishMessage(topic, content)
-              });
-              self._isConnect = true
-              self.loginBus()
-              self.startHeartBeat()
-						  return resolve();
-					  },
-					  onConnectError: function() {
-						  return reject()
-					  },
-					  onConnectClose: function() {
-						  return reject()
-					  }
+          onConnectSuccess: function() {
+            databus.setPushDataFactory(function(topic, content) {
+              dispatchPublishMessage(topic, content)
+            });
+            self._isConnect = true
+            self.startHeartBeat()
+            self.loginBus().then((json) => {
+              self.addr = json.addr
+              return resolve('success')
+            }).catch((err) => {
+              return reject(err)
+            })
+          },
+          onConnectError: function(err) {
+            return reject(err)
+          },
+          onConnectClose: function(err) {
+            return reject(err)
+          }
 		  })
 		})
 	}
@@ -181,6 +186,7 @@ class AppClient {
 		})
 	}
 
+  // 批量订阅
 	subscribe(protoList, publishCallback) {
     const self = this
     this._publishCallback = publishCallback
@@ -251,11 +257,10 @@ class AppClient {
         databus.reconnect()
         return
       }
-      
+
       this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", {
         cpu: 0, topmemory: 0, memory: 0, sendqueue: 0, receivequeue: 0
       }).then((msg) => {
-        console.log(msg)
       }).catch((err) => {
         console.log(err)
       })

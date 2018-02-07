@@ -9,15 +9,12 @@ class App extends Component {
 
   onLoginBus = () => {
     appClient.open('47.100.7.224', '55555')
-    .then(() => {
-      console.log('start web socket ok')
-      return appClient.loginBus('trader')
-    })
     .then((json) => {
+      console.log('start web socket ok')
       const ls = [...this.state.result]
       ls.push(JSON.stringify(json))
       this.setState({ result: ls })
-    }) 
+    })
     .catch((err) => {
       this.setState({ error: JSON.stringify(err) })
     })
