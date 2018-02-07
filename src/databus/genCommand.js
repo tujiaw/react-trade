@@ -44,7 +44,6 @@ function writeFileList() {
     }
     
     const fileListStr = '\n\n export const FileList=' + JSON.stringify(FileList, undefined, 2)
-    console.log(fileListStr)
     var w = fs.createWriteStream(__dirname + '/Command.js', { flags: 'a+'})
     w.write(fileListStr, function(err, data) {
         if (err) {

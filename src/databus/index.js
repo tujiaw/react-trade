@@ -222,8 +222,13 @@ class AppClient {
     }
   }
 
-	// 发送消息
+	// 发送消息，proto文件名通过Command.js中的FileList映射查找
 	post(protoRequest, protoResponse, requestObj) {
+    return this.postProto(getProtoFilename(protoRequest), protoRequest, protoResponse, requestObj)
+  }
+
+  // 发送消息，带proto文件名
+  postProto(protoFilename, protoRequest, protoResponse, requestObj) {
     const self = this
 		return new Promise((resolve, reject) => {
 			const cmd = getCommandFromProto(protoRequest, protoResponse)
@@ -231,7 +236,7 @@ class AppClient {
 				console.error('command error, request:' + protoRequest + ', response:' + protoResponse)
 				return reject()
 			}
-			databus.requestOnce(cmd, getProtoFilename(protoRequest), protoRequest, protoResponse, {
+			databus.requestOnce(cmd, protoFilename, protoRequest, protoResponse, {
 				fillRequest: function(request) {
 					Object.assign(request, requestObj)
 				},
