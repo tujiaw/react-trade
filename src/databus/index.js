@@ -17,7 +17,7 @@ export const heartBeat = (function() {
 
 // 根据proto获取command值
 const commandCache = {}
-function getCommandValue(proto_request, proto_response) {
+function getCommandFromProto(proto_request, proto_response) {
 	proto_response = proto_response || 'MsgExpress.CommonResponse'
 	const proto_str = proto_request + '-' + proto_response 
 	if (commandCache[proto_str]) {
@@ -44,6 +44,36 @@ function getCommandValue(proto_request, proto_response) {
 		}
 	}
 	return -1
+}
+
+function getProtoFromCommand(cmd) {
+	const appId = cmd >> 20
+	const funcId = (cmd - ((cmd >> 20) << 20))
+	for (let i = 0, appCount = AppList.length; i < appCount; i++) {
+		const app = AppList[i]
+		const header = app['$']
+		if (!header || !app['function']) {
+			continue
+		}
+
+		if (parseInt(header.id) !== appId) {
+			continue
+		}
+
+		for (let j = 0, funcCount = app['function'].length; j < funcCount; j++) {
+			const func = app['function'][j]
+			const funcObj = func['$']
+			if (funcObj) {
+				if (parseInt(funcObj.id) === funcId) {
+					return {
+						request: funcObj.request,
+						response: funcObj.response
+					}
+				}
+			}
+		}
+	}
+	return null
 }
 
 // 解析推送的消息
@@ -83,14 +113,14 @@ export function subscribeList(publishProtoRequestList) {
   return databus.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
 		let objList = []
 		for (let i = 0, count = publishProtoRequestList.length; i < count; i++) {
-			const cmd = getCommandValue(publishProtoRequestList[i])
+			const cmd = getCommandFromProto(publishProtoRequestList[i])
 			if (cmd >= 0) {
 				let newObj = {...obj}
 				newObj.subid = subIdStart++
 				newObj.topic = cmd
 				objList.push(newObj)
 
-				databus.requestPublishData(cmd, dispatchPublishMessage)
+				// databus.requestPublishData(cmd, dispatchPublishMessage)
 			}
 		}
     return Promise.resolve(objList)
@@ -107,12 +137,22 @@ export function subscribeList(publishProtoRequestList) {
   })
 }
 
-function dispatchPublishMessage(jsonContent) {
-	parsePublishMessage('trade', jsonContent).then((obj) => {
-		console.log(obj)
-	}).catch((err) => {
-		console.log(err)
-	})
+function dispatchPublishMessage(topic, content) {
+		const proto = getProtoFromCommand(topic)
+		if (!proto) {
+			console.log('get proto from command failed, topic:', topic)
+			return
+		}
+	
+		return databus.buildProtoObject('trade', proto.request)
+		.then((Msg) => {
+			try {
+				const decodedMsg = Msg.decode(content)
+				console.log(decodedMsg)
+			} catch (e) {
+				console.error(e)
+			}
+		})
 }
 
 /**
@@ -122,8 +162,8 @@ export function startWebSocket(wsip, wsport, path) {
   return new Promise((resolve, reject) => {
       databus.connect(wsip, wsport, path || '', {
 				onConnectSuccess: function() {
-					databus.setPushDataFactory(function(topic, jsonContent) {
-						databus.notifyPublishData(topic, jsonContent);
+					databus.setPushDataFactory(function(topic, content) {
+						dispatchPublishMessage(topic, content)
 					});
 					heartBeat.start()
 					return resolve();
@@ -147,7 +187,7 @@ export function closeWebSocket() {
 
 export function protoRequest(protoFileName, protoRequest, protoResponse, requestObj) {
 	return new Promise((resolve, reject) => {
-		const cmd = getCommandValue(protoRequest, protoResponse)
+		const cmd = getCommandFromProto(protoRequest, protoResponse)
 		if (cmd < 0) {
 			console.error('command error, request:' + protoRequest + ', response:' + protoResponse)
 			return reject()

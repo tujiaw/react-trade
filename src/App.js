@@ -10,6 +10,7 @@ class App extends Component {
 
   onLoginBus = () => {
     startWebSocket('47.100.7.224', '55555')
+    //startWebSocket('192.168.1.80', '55555')
     .then(() => {
       console.log('start web socket ok')
       return loginBus()
@@ -18,7 +19,7 @@ class App extends Component {
       const ls = [...this.state.result]
       ls.push(JSON.stringify(json))
       this.setState({ result: ls })
-    })
+    }) 
     .catch((err) => {
       this.setState({ error: JSON.stringify(err) })
     })

@@ -69,6 +69,13 @@
 		return this.type;
 	};
 
+	DataBusPackage.prototype.isPublishNewMsg = function() {
+		if (this.options && (((this.options >> 7) & 1) === 1)) {
+			return true
+		}
+		return false
+	}
+
 	DataBusPackage.encodePackage = function(serialNum, command, body) {
 		var pk = new DataBusPackage();
 		pk.setSerialNumber(serialNum);
@@ -135,7 +142,7 @@
         	if(buffer.remaining < DataBusPackage.SIZE_OF_HEAD) {
         		break;
 			}
-            // read util 'P'
+			// read util 'P'
             if (!(buffer.readByte() === DataBusPackage.PACKAGE_START && buffer.readByte() === DataBusPackage.PACKAGE_START)) {
                 continue;
             }

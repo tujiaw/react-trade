@@ -114,7 +114,13 @@
                 for (var i = 0; i < packages.length; i++) {
                     let p = packages[i];
                     if (p.getType() === DataBusPackage.Publish) {
-                        handlePublish(p)
+                        if (p.isPublishNewMsg()) {
+                            if (pushDataFactory) {
+                                pushDataFactory(p.getCommand(), p.body.view)
+                            }
+                        } else {
+                            handlePublish(p)
+                        }
                     } else {
                         ref.publishInfo(PREFIX_DATABUS, p.getSerialNumber(), p.body, p.getCommand() ? false : true);
                     }
