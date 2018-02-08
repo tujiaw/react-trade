@@ -8,6 +8,8 @@ class App extends Component {
   }
 
   onLoginBus = () => {
+    appClient.setProtoFileDir('http://3inns.cn/protobuf/')
+    
     appClient.open('47.100.7.224', '55555')
     .then((json) => {
       console.log('start web socket ok')

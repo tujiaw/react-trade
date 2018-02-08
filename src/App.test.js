@@ -1,9 +1,5 @@
-const x = null
+var x = 'ddd'
 
-if (x) {
-  console.log('1111')
-}
-
-if (!x) {
-  console.log('2222')
+if (typeof x === 'string') {
+  console.log('33333')
 }

@@ -31,7 +31,8 @@ function getCommandFromProto(proto_request, proto_response) {
 				}
 			}
 		}
-	}
+  }
+  console.error('getCommandFromProto error, request:' + proto_response + ', response:' + proto_response)
 	return null
 }
 
@@ -62,7 +63,8 @@ function getProtoFromCommand(cmd) {
 				}
 			}
 		}
-	}
+  }
+  console.error('getProtoFromCommand error, cmd:' + cmd)
 	return null
 }
 
@@ -140,6 +142,10 @@ class AppClient {
 
   setHeartBeatIntervalSecond(second) {
     this._hearBeatIntervalSecond = second
+  }
+
+  setProtoFileDir(dir) {
+    databus.setProtoFileDir(dir)
   }
 
 	// 初始化连接

@@ -20,6 +20,7 @@
   var pushDataFactory = undefined;
   var mIp, mPort, mPath;
   var PREFIX_DATABUS = "DATABUS";
+  var PROTO_FILE_DIR = '/protobuf/'
 
   var databus = {
     close: function () {
@@ -141,7 +142,12 @@
         if (protobufBuilders[proto_package]) {
           return resolve(protobufBuilders[proto_package])
         }
-        ProtoBuf.load("/protobuf/" + proto_package + ".proto").then((root) => {
+
+        if (PROTO_FILE_DIR[PROTO_FILE_DIR.length - 1] !== '/') {
+          PROTO_FILE_DIR += '/'
+        }
+        const protoFilePath = PROTO_FILE_DIR + proto_package + ".proto"
+        ProtoBuf.load(protoFilePath).then((root) => {
           protobufBuilders[proto_package] = root;
           return resolve(root)
         }).catch((err) => {
@@ -262,6 +268,9 @@
         parent[p] = child[p];
       }
       return parent;
+    },
+    setProtoFileDir: function(dir) {
+      PROTO_FILE_DIR = dir
     }
   }
   return databus;
