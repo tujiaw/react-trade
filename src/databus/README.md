@@ -1,11 +1,13 @@
 # 安装依赖库
+react native中protobufjs要用6.7.0老版本的，否则enum会出错，其他的用最新版就可以了。
 将下面第三方库加入到项目的package.json的dependencies中，然后: npm install
 ```
 "bytebuffer": "^5.0.1",
 "long": "^3.2.0",
 "pako": "^1.0.6",
-"protobufjs": "^6.8.3",
-"xml2js": "^0.4.19"
+"protobufjs": "^6.7.0",
+"xml2js": "^0.4.19",
+"lodash": "^4.17.5"
 ```
 
 # 生成Command.js文件
@@ -19,18 +21,47 @@ node genCommand.js
 ```
 import appClient from '../databus'
 
-appClient.open(...)
+// 连接并初始化
+appClient.open(config.wsip, config.wsport)
+    .then((json) => {
+        return appClient.subscribe([
+            'StockServer.StockDataRequest, StockServer.StockDataResponse',
+            'Trade.TradingAccount, MsgExpress.CommonResponse', 
+            'Trade.MarketData, MsgExpress.CommonResponse',
+            'Trade.Position, MsgExpress.CommonResponse',
+            'Trade.Order, MsgExpress.CommonResponse',
+            'Trade.Trade, MsgExpress.CommonResponse',
+            'Trade.ErrorInfo, MsgExpress.CommonResponse'
+        ], (data) => {
+            // 处理推送
+            this.handleDispatch(data)
+        })
+    })
+    .then((json) => {
+        console.log('subscribe result', json)
+        return appClient.post('Trade.LoginReq', 'Trade.LoginResp', {
+            userid: config.username, 
+            passwd: config.password,
+            instruments: config.codeList
+        })
+    })
+    .then((json) => {
+        console.log('login trade', json)
+        resolve(json)
+    })
+    .catch((err) => {
+        console.log(JSON.stringify(err))
+        reject(err)
+    })
+
+// 发送消息
+appClient.post('Trade.ModifyReq', 'Trade.ModifyResp', {
+    orderid: orderId,
+    price: price
+}).then(json => {
+    // 应答
+})
 ```
 
-# 使用url路径的proto
-更改protobufjs源码库中的root.js, 191行
-```
-for (var i = 0, resolved; i < filename.length; ++i)
-    if (typeof filename[i] === 'string' && (filename[i].indexOf('http://') === 0 || filename[i].indexOf('https://'))) {
-        fetch(filename[i])
-    } else if (resolved = self.resolvePath("", filename[i])) {
-        fetch(resolved);
-    }
-```
 
 

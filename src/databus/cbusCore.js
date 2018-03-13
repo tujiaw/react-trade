@@ -1,18 +1,20 @@
 (function(global, factory) {
 /* CommonJS */ if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
   module['exports'] = (function() {
-    var DataBusPackage = require('./DataBusPackage');
-    var observer = require('./observer');
-    return factory(require("protobufjs"), require('bytebuffer'), DataBusPackage, observer);
+    var cbusPackage = require('./cbusPackage');
+    var ProtoBuf = require("protobufjs");
+    var Long = require("long");
+    ProtoBuf.util.Long = Long;
+    ProtoBuf.configure();
+    return factory(ProtoBuf, require('bytebuffer'), cbusPackage);
   })();
 /* Global */ else
-  global["databus"] = factory(
+  global["cbusCore"] = factory(
     global.dcodeIO.ProtoBuf, 
     global.dcodeIO.ByteBuffer,
-    global.DataBusPackage,
-    global.observer,
+    global.cbusPackage,
   );
-})(this, function(ProtoBuf, ByteBuffer, DataBusPackage, observer) {
+})(this, function(ProtoBuf, ByteBuffer, cbusPackage) {
   var ws = undefined;
   var serial = 65536;
   var protobufBuilders = {};
@@ -22,18 +24,65 @@
   var PREFIX_DATABUS = "DATABUS";
   var PROTO_FILE_DIR = '/protobuf/'
 
-  var databus = {
+  var Observer = function() {
+    this.subscribers = [];			// 订阅者数组
+  }
+  Observer.prototype = {
+    sub : function(evt, fn) {		// 订阅方法，返回订阅event标识符
+      this.subscribers[evt] ? this.subscribers[evt].push(fn) : (this.subscribers[evt] = []) && this.subscribers[evt].push(fn);
+      return '{"evt":"' + evt + '","fn":"' + (this.subscribers[evt].length - 1) + '"}';
+    },
+    pub : function(evt, args) {	// 发布方法，成功后返回自身
+      if (this.subscribers[evt]) {
+        for (var i in this.subscribers[evt]) {
+          if (typeof(this.subscribers[evt][i]) === 'function') {
+            if (arguments.length === 2) {
+              this.subscribers[evt][i](args);
+            } else {
+              this.subscribers[evt][i](arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6]);
+            }
+          }
+        }
+        return this;
+      }
+      return false;
+    },
+    unsub : function(subId) {		// 解除订阅，需传入订阅event标识符
+      try {
+        var id = JSON.parse(subId);
+        this.subscribers[id.evt][id.fn] = null;
+        delete this.subscribers[id.evt][id.fn];
+      } catch (err) {
+        console.log(err);
+      }
+    },
+    contains : function(evt) {
+      return this.subscribers[evt] ? true : false;
+    }
+  }
+  var observer = new Observer();
+
+  var cbusCore = {
     close: function () {
       if (ws) {
-          ws.close();
-          ws = undefined;
+        console.log('close websocket');
+        ws.onopen = function() {}
+        ws.onmessage = function() {}
+        ws.onclose = function() {}
+        ws.close()
+        ws = undefined
       }
+    },
+    readyState: function() {
+      if (ws) {
+        return ws.readyState
+      }
+      return -1
     },
     reconnect: function (options) {
       this.connect(mIp, mPort, mPath, options);
     },
     connect: function (ip, port, path, options) {
-      this.close();
       mIp = ip;
       mPort = port;
       mPath = path;
@@ -55,7 +104,7 @@
       }
       ws.binaryType = "arraybuffer";
       ws.onopen = function () {
-        console.log("WebSocket Open Success, Ip:%s, Port:%s, Path:%s", ip, port, path);
+        console.log("WebSocket Open Success,", ip, ":", port, path);
         if (!!settings.onConnectSuccess) {
           settings.onConnectSuccess();
         }
@@ -63,16 +112,16 @@
       var ref = this;
       ws.onmessage = function (evt) {
         if (typeof (evt.data) === "string") {
-          console.log("Receive String Data : " + evt.data);
+          console.log("Receive String Data");
           return;
         }
 
         var bb, packages;
         try {
           bb = ByteBuffer.wrap(evt.data, "binary");
-          packages = DataBusPackage.decodePackage(bb);
+          packages = cbusPackage.decodePackage(bb);
         } catch(err) {
-          console.error(err)
+          console.log(err)
           return;
         }
 
@@ -114,7 +163,7 @@
 
         for (var i = 0; i < packages.length; i++) {
           let p = packages[i];
-          if (p.getType() === DataBusPackage.Publish) {
+          if (p.getType() === cbusPackage.Publish) {
             if (p.isPublishNewMsg()) {
               if (pushDataFactory) {
                 pushDataFactory(p.getCommand(), p.body.view)
@@ -128,12 +177,23 @@
         }
       };
       ws.onclose = function (event) {
-        console.log("Client Notify WebSocket Has Closed...", event);
+        console.log("Client Notify WebSocket Has Closed...");
         if (settings.onConnectClose) {
           settings.onConnectClose();
         }
       };
     },
+
+    // 可以使用json格式直接初始化
+    addProtoBuilder: function(protoFileName, requireObj) {
+      try {
+        var root = ProtoBuf.Root.fromJSON(requireObj)
+        protobufBuilders[protoFileName] = root
+      } catch(err) {
+        console.error('addProtoBuilder error', protoFileName, err)
+      }
+    },
+
     /**
      * 构建一个protobuf包
      */
@@ -151,7 +211,7 @@
           protobufBuilders[proto_package] = root;
           return resolve(root)
         }).catch((err) => {
-          console.error('buildProtoPackage ' + proto_package + ' failed, err:' + err)
+          console.error('buildProtoPackage ', proto_package, err, protoFilePath)
           return reject(err)
         });
       })
@@ -166,6 +226,7 @@
         return this.buildProtoPackage(packageName).then((root) => {
           const obj = root.lookupTypeOrEnum(objectName)
           if (obj) {
+            // console.log('buildProtoObject', proto_package, proto_objectname)
             return resolve(obj)
           }
           const errStr = 'builerProtoObject ' + objectName + ' failed'
@@ -181,25 +242,29 @@
         // 验证填充的数据是否有效
         var errMsg = obj.verify(payload);
         if (errMsg) {
-            throw Error(errMsg);
+          console.error('requestOnce verify err', errMsg, proto_request, payload)
+          throw Error(errMsg);
         }
         // 创建消息对象
         var message = obj.create(payload); // or use .fromObject if conversion is necessary
+        console.log('requestOnce', message)
         // 编码二进制流
         var buffer = obj.encode(message).finish();
+        // 一定要拷贝一份，否则byteOffset会一直累加（大概到250次）造成encodePackage错误
+        buffer = new Uint8Array(buffer)
         // 包装成ByteBuffer
-        buffer = ByteBuffer.wrap(buffer, "binary");
-        this.sendmsg(cmd, buffer, proto_package, proto_response, callback, false);
+        var binary = ByteBuffer.wrap(buffer, "binary");
+        this.sendmsg(cmd, binary, proto_package, proto_response, callback, false);
       })
     },
     sendmsg: function (cmd, byteBuffer, proto_package, proto_response, callback, forever) {
       var serialnum = serial++;
       var pack;
       try {
-        pack = DataBusPackage.encodePackage(serialnum, cmd, byteBuffer);
+        pack = cbusPackage.encodePackage(serialnum, cmd, byteBuffer);
       } catch(err) {
-        console.error(err + ', bytebuffer:' + byteBuffer)
-        return;
+        console.error(serialnum, cmd, err)
+        return
       }
       
       if (forever === undefined || !forever) {
@@ -211,7 +276,7 @@
                 const msg = obj.decode(info.view);
                 callback.handleResponse(msg);
               } catch (e) {
-                console.error(e)
+                console.error(proto_response, e)
               }
             })
           } else if (callback.handlerError) {  // 处理错误
@@ -220,7 +285,7 @@
                 const msg = obj.decode(info.view);
                 callback.handlerError(msg);
               } catch (e) {
-                console.error(e)
+                console.error('ErrMessage', e)
               }
             })
           }
@@ -228,8 +293,6 @@
       }
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(pack.toArrayBuffer());
-      } else if (callback.handlerError) {
-        callback.handlerError('disconnect')
       }
     },
     setPushDataFactory: function (factory) {
@@ -273,5 +336,5 @@
       PROTO_FILE_DIR = dir
     }
   }
-  return databus;
+  return cbusCore;
 });

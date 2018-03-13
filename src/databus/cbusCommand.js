@@ -1,4 +1,13 @@
-export const AppList=[
+(function(global, factory) {
+  if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
+    module['exports'] = (function() {
+      return factory();
+  })();
+  else
+    global["cbusCommand"] = factory();
+})(this, function() {
+  return {
+    AppList: [
   {
     "$": {
       "id": "0",
@@ -183,6 +192,47 @@ export const AppList=[
   },
   {
     "$": {
+      "id": "255",
+      "name": "StockInfoServer",
+      "desc": ""
+    },
+    "function": [
+      {
+        "$": {
+          "id": "1",
+          "request": "StockServer.StockDataRequest",
+          "response": "StockServer.StockDataResponse",
+          "desc": ""
+        }
+      },
+      {
+        "$": {
+          "id": "2",
+          "request": "StockServer.IpoDataRequest",
+          "response": "StockServer.IpoDataResponse",
+          "desc": ""
+        }
+      },
+      {
+        "$": {
+          "id": "3",
+          "request": "StockServer.StockInfoRequest",
+          "response": "StockServer.StockInfoResponse",
+          "desc": ""
+        }
+      },
+      {
+        "$": {
+          "id": "4",
+          "request": "StockServer.NewStockDataRequest",
+          "response": "StockServer.NewStockDataResponse",
+          "desc": ""
+        }
+      }
+    ]
+  },
+  {
+    "$": {
       "id": "888",
       "name": "Trade",
       "desc": ""
@@ -292,71 +342,16 @@ export const AppList=[
       }
     ]
   }
-]
-
- export const FileList=[
-  {
-    "filename": "accountserver",
-    "package": "AccountServer"
-  },
-  {
-    "filename": "clientcommunicate",
-    "package": "ClientCommunicate"
-  },
-  {
-    "filename": "crm",
-    "package": "Crm"
-  },
-  {
-    "filename": "fileserver",
-    "package": "FileServer"
-  },
-  {
-    "filename": "gateway",
-    "package": "Gateway"
-  },
-  {
-    "filename": "infoserver",
-    "package": "InfoServer"
-  },
-  {
-    "filename": "monitor",
-    "package": "monitor"
-  },
-  {
-    "filename": "monitorserver",
-    "package": "MonitorServer"
-  },
+],
+    ProtoFileList: [
   {
     "filename": "msgexpress",
     "package": "MsgExpress"
   },
   {
-    "filename": "msgstatistics",
-    "package": "MsgStatistics"
-  },
-  {
-    "filename": "pnserver",
-    "package": "PNServer"
-  },
-  {
-    "filename": "QMClient",
-    "package": "QMClient"
-  },
-  {
-    "filename": "qmppsm",
-    "package": "SM"
-  },
-  {
-    "filename": "searchserver",
-    "package": "SearchServer"
-  },
-  {
     "filename": "trade",
     "package": "Trade"
-  },
-  {
-    "filename": "update",
-    "package": "Update"
   }
 ]
+  }
+});
