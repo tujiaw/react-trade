@@ -1,5 +1,5 @@
 import React, { Component } from 'react'
-import appClient from './databus'
+import cbus from './databus'
 
 class App extends Component {
   state = {
@@ -7,26 +7,47 @@ class App extends Component {
     result: [],
   }
 
+  handleDispatch = (data) => {
+    console.log(data)
+  }
+
   onLoginBus = () => {
-    appClient.setProtoFileDir('http://3inns.cn/protobuf/')
-    
-    appClient.open('47.100.7.224', '55555')
+    cbus.setHeartBeatIntervalSecond(10)
+    cbus.open('47.100.7.224', '55555')
     .then((json) => {
-      console.log('start web socket ok')
-      const ls = [...this.state.result]
-      ls.push(JSON.stringify(json))
-      this.setState({ result: ls })
+      return cbus.subscribe([
+        'StockServer.StockDataRequest, StockServer.StockDataResponse',
+        'Trade.TradingAccount, MsgExpress.CommonResponse', 
+        'Trade.MarketData, MsgExpress.CommonResponse',
+        'Trade.Position, MsgExpress.CommonResponse',
+        'Trade.Order, MsgExpress.CommonResponse',
+        'Trade.Trade, MsgExpress.CommonResponse',
+        'Trade.ErrorInfo, MsgExpress.CommonResponse'
+      ], (data) => {
+        this.handleDispatch(data)
+      })
+    })
+    .then((json) => {
+      console.log('subscribe result', json)
+      return cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
+        userid: 'admin', 
+        passwd: 'admin',
+        instruments: ['IC1803', 'IF1803', 'IH1803', 'I1805']
+      })
+    })
+    .then((json) => {
+      console.log('login trade', json)
     })
     .catch((err) => {
-      this.setState({ error: JSON.stringify(err) })
+      console.log(JSON.stringify(err))
     })
   }
 
   onLoginTrader = () => {
-    appClient.post('Trade.LoginReq', 'Trade.LoginResp', {
+    cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
       userid: 'admin',
       passwd: 'admin',
-      instruments: ['IC1802', 'IF1802', 'IH1802', 'i1805']
+      instruments: ['IC1803', 'IF1803', 'IH1803', 'i1805']
     })
     .then((json) => {
       const ls = [...this.state.result]
@@ -39,13 +60,6 @@ class App extends Component {
   }
 
   onSubAccount = () => {
-    appClient.subscribe(['Trade.TradingAccount'], (name, content) => {
-      if (name === 'Trade.TradingAccount') {
-        const ls = [...this.state.result]
-        ls.push(JSON.stringify(content))
-        this.setState({ result: ls })
-      }
-    })
   }
 
   onClearResult = () => {
