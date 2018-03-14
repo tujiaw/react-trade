@@ -26,15 +26,19 @@
   var reconnectAttempts = 0;
   var reconnectIntervalSecond = 0;
 
-  var Observer = function() {
-    this.subscribers = [];			// 订阅者数组
-  }
-  Observer.prototype = {
-    sub : function(evt, fn) {		// 订阅方法，返回订阅event标识符
+  class Observer {
+    constructor() {
+      this.subscribers = []; // 订阅者数组
+    }
+
+    // 订阅方法，返回订阅event标识符
+    sub(evt, fn) {
       this.subscribers[evt] ? this.subscribers[evt].push(fn) : (this.subscribers[evt] = []) && this.subscribers[evt].push(fn);
       return '{"evt":"' + evt + '","fn":"' + (this.subscribers[evt].length - 1) + '"}';
-    },
-    pub : function(evt, args) {	// 发布方法，成功后返回自身
+    }
+
+    // 发布方法，成功后返回自身
+    pub(evt, args) {
       if (this.subscribers[evt]) {
         for (var i in this.subscribers[evt]) {
           if (typeof(this.subscribers[evt][i]) === 'function') {
@@ -48,8 +52,10 @@
         return this;
       }
       return false;
-    },
-    unsub : function(subId) {		// 解除订阅，需传入订阅event标识符
+    }
+
+    // 解除订阅，需传入订阅event标识符
+    unsub(subId) {
       try {
         var id = JSON.parse(subId);
         this.subscribers[id.evt][id.fn] = null;
@@ -57,13 +63,14 @@
       } catch (err) {
         console.log(err);
       }
-    },
-    contains : function(evt) {
+    }
+
+    contains(evt) {
       return this.subscribers[evt] ? true : false;
     }
   }
-  var observer = new Observer();
 
+  var observer = new Observer();
   var cbusCore = {
     close: function () {
       if (ws) {
@@ -88,6 +95,7 @@
       reconnectIntervalSecond = second;
     },
     connect: function (ip, port, path, options) {
+      var self = this;
       mIp = ip;
       mPort = port;
       mPath = path;
@@ -107,6 +115,43 @@
         console.log("No Support WebSocket...");
         return;
       }
+
+      // 处理老的推送方式
+      const handleOldPublish = function(p) {
+        Promise.all([
+            self.buildProtoObject("msgexpress", "MsgExpress.DataType"),
+            self.buildProtoObject("msgexpress", "MsgExpress.PublishData")
+        ]).then(values => {
+          const DataType = values[0].values
+          const publishObj = values[1]
+          const msg = publishObj.decode(p.body.view)
+          if (msg && msg.item) {
+            let content = []
+            for (let j = 0; j < msg.item.length; j++) {
+                let item = msg.item[j];
+                let key = item.key;
+                let type = item.type;
+                let value = item.value[0];
+                if (type === DataType.STRING) { value = item.strVal[0]; } 
+                else if (type === DataType.INT64) { value = item.lVal[0]; } 
+                else if (type === DataType.UINT64) { value = item.ulVal[0]; }
+                else if (type === DataType.INT32) { value = item.iVal[0]; } 
+                else if (type === DataType.UINT32) { value = item.uiVal[0]; } 
+                else if (type === DataType.FLOAT) { value = item.fVal[0]; } 
+                else if (type === DataType.DOUBLE) { value = item.fVal[0]; } 
+                else if (type === DataType.DATETIME) { value = item.tVal[0]; } 
+                else if (type === DataType.BINARY) { value = item.rawVal[0].toString("binary"); }
+                  content.push({ key: key, value: value });
+              }
+              if (pushDataFactory && content.length) {
+                pushDataFactory(msg.topic, content);
+              }
+            }
+        }).catch(err => {
+            console.error(err)
+        })
+      }
+
       ws.binaryType = "arraybuffer";
       ws.onopen = function () {
         reconnectAttempts = 0;
@@ -115,68 +160,31 @@
           settings.onConnectSuccess();
         }
       };
-      var self = this;
+      
       ws.onmessage = function (evt) {
         if (typeof (evt.data) === "string") {
           console.log("Receive String Data");
           return;
         }
 
-        var bb, packages;
+        let packages = undefined;
         try {
-          console.log(evt.data);
-          bb = ByteBuffer.wrap(evt.data, "binary");
+          const bb = ByteBuffer.wrap(evt.data, "binary");
           packages = cbusPackage.decodePackage(bb);
         } catch(err) {
           console.log(err)
           return;
         }
 
-        // 处理推送消息
-        const handlePublish = (p) => {
-          Promise.all([
-              self.buildProtoObject("msgexpress", "MsgExpress.DataType"),
-              self.buildProtoObject("msgexpress", "MsgExpress.PublishData")
-          ]).then(values => {
-            const DataType = values[0].values
-            const publishObj = values[1]
-            const msg = publishObj.decode(p.body.view)
-            if (msg && msg.item) {
-              let content = []
-              for (let j = 0; j < msg.item.length; j++) {
-                  let item = msg.item[j];
-                  let key = item.key;
-                  let type = item.type;
-                  let value = item.value[0];
-                  if (type === DataType.STRING) { value = item.strVal[0]; } 
-                  else if (type === DataType.INT64) { value = item.lVal[0]; } 
-                  else if (type === DataType.UINT64) { value = item.ulVal[0]; }
-                  else if (type === DataType.INT32) { value = item.iVal[0]; } 
-                  else if (type === DataType.UINT32) { value = item.uiVal[0]; } 
-                  else if (type === DataType.FLOAT) { value = item.fVal[0]; } 
-                  else if (type === DataType.DOUBLE) { value = item.fVal[0]; } 
-                  else if (type === DataType.DATETIME) { value = item.tVal[0]; } 
-                  else if (type === DataType.BINARY) { value = item.rawVal[0].toString("binary"); }
-                  content.push({ key: key, value: value });
-                }
-                if (pushDataFactory && content.length) {
-                  pushDataFactory(msg.topic, content);
-                }
-              }
-          }).catch(err => {
-              console.error(err)
-          })
-        }
-
-        for (var i = 0; i < packages.length; i++) {
-          let p = packages[i];
+        for (let i = 0, count = packages.length; i < count; i++) {
+          const p = packages[i];
           if (p.getType() === cbusPackage.Publish) {
             if (p.isPublishNewMsg()) {
               if (pushDataFactory) {
                 pushDataFactory(p.getCommand(), p.body.view)
               }
             } else {
-              handlePublish(p)
+              handleOldPublish(p)
             }
           } else {
             self.publishInfo(PREFIX_DATABUS, p.getSerialNumber(), p.body, p.getCommand() ? false : true);

@@ -13,6 +13,18 @@ class App extends Component {
 
   onLoginBus = () => {
     cbus.setHeartBeatIntervalSecond(10)
+    cbus.setEvent(
+      function onopen() {
+        console.log('on open', new Date().toLocaleTimeString());
+      },
+      function onclose(event) {
+        console.log('on close', event, new Date().toLocaleTimeString());
+      },
+      function onerror(event) {
+        console.log('on error', event, new Date().toLocaleTimeString());
+      }
+    )
+
     cbus.open('47.100.7.224', '55555')
     .then((json) => {
       return cbus.subscribe([
