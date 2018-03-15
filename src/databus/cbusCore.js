@@ -73,8 +73,8 @@
     }
   }
 
-  var observer = new Observer();
   var cbusCore = {
+    observer: new Observer(),
     close: function () {
       if (ws) {
         console.log('close websocket');
@@ -343,19 +343,20 @@
       pushDataFactory = factory;
     },
     subscribeInfo: function (prefix, id, callback) {
-      var subId = observer.sub(prefix + id, function (info, extra) {
+      var self = this;
+      var subId = this.observer.sub(prefix + id, function (info, extra) {
         callback(info, extra);
-        observer.unsub(subId);
+        self.observer.unsub(subId);
       });
     },
     publishInfo: function (prefix, id, info, extra) {
-      observer.pub(prefix + id, info, extra);
+      this.observer.pub(prefix + id, info, extra);
     },
     contains: function (id) {
-      return observer.contains(id);
+      return this.observer.contains(id);
     },
     requestPublishData: function (topic, callbacks) {
-      observer.sub(topic, function (args) {
+      this.observer.sub(topic, function (args) {
         if (arguments.length === 1) {
           callbacks(args);
         } else {
@@ -365,9 +366,9 @@
     },
     notifyPublishData: function (topic, args) {
       if (arguments.length === 2) {
-        observer.pub(topic, args);
+        this.observer.pub(topic, args);
       } else {
-        observer.pub(topic, arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6]);
+        this.observer.pub(topic, arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6]);
       }
     },
     extend: function (parent, child) {

@@ -1,32 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="X-UA-Compatible" content="ie=edge">
-    <title>databus web test</title>
-    <script src="./dist/bytebuffer.js"></script>
-    <script src="./dist/long.js"></script>
-    <script src="./dist/pako.js"></script>
-    <script src="./dist/protobuf.js"></script>
-    <script src="./cbusCommand.js"></script>
-    <script src="./cbusPackage.js"></script>
-    <script src="./cbusCore.js"></script>
-    <script src="./index.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>databus web test</title>
+  <script src="./dist/bytebuffer.min.js"></script>
+  <script src="./dist/long.min.js"></script>
+  <script src="./dist/pako.min.js"></script>
+  <script src="./dist/protobuf.min.js"></script>
+  <script src="./cbusCommand.js"></script>
+  <script src="./cbusPackage.js"></script>
+  <script src="./cbusCore.js"></script>
+  <script src="./index.js"></script>
 </head>
+
 <body>
-    <button id="open" type="button">open</button>
-    <script>
-        var btn = document.getElementById('open');
-		cbus.setProtoFileDir('/databus/protobuf');
-        btn.onclick = function() {
-            cbus.open('47.100.7.224', '55555')
-            .then(json => {
-				alert(json);
-			}).catch(err => {
-				alert(err);
-			});
-		}
-    </script>
+  <button id="open" type="button">open</button>
+  <script>
+    var btn = document.getElementById('open');
+    cbus.setProtoFileDir('/databus/protobuf');
+    function handleDispatch(data) {
+      console.log(data);
+    }
+
+    btn.onclick = function () {
+      cbus.open('47.100.7.224', '55555')
+        .then((json) => {
+          return cbus.subscribe([
+            'StockServer.StockDataRequest, StockServer.StockDataResponse',
+            'Trade.TradingAccount, MsgExpress.CommonResponse',
+            'Trade.MarketData, MsgExpress.CommonResponse',
+            'Trade.Position, MsgExpress.CommonResponse',
+            'Trade.Order, MsgExpress.CommonResponse',
+            'Trade.Trade, MsgExpress.CommonResponse',
+            'Trade.ErrorInfo, MsgExpress.CommonResponse'
+          ], (data) => {
+            handleDispatch(data)
+          })
+        })
+        .then((json) => {
+          console.log('subscribe result', json)
+          return cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
+            userid: 'admin',
+            passwd: 'admin',
+            instruments: ['IC1803', 'IF1803', 'IH1803', 'I1805']
+          })
+        })
+        .then((json) => {
+          console.log('login trade', json)
+        })
+        .catch((err) => {
+          console.log(JSON.stringify(err))
+        })
+    }
+  </script>
 </body>
+
 </html>
