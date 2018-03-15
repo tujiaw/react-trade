@@ -45,12 +45,15 @@ parser.parseString(xmlContent, function (err, result) {
       console.error('file content error', file)
       continue;
     }
-    
+
     const end = content.indexOf(';', start + 1)
     if (end > start) {
       const arr = content.substring(start, end).split(' ')
       if (arr.length > 1) {
-        protoFileList.push({ filename: filename, package: arr[1]})
+        protoFileList.push({
+          filename: filename,
+          package: arr[1]
+        })
       }
     }
   }
@@ -65,7 +68,7 @@ parser.parseString(xmlContent, function (err, result) {
   template = template.replace('%AppList%', JSON.stringify(appList, undefined, 2));
   template = template.replace('%ProtoFileList%', JSON.stringify(protoFileList, undefined, 2))
   const w = fs.createWriteStream(dstFile);
-  w.write(template, function(err, data) {
+  w.write(template, function (err) {
     if (err) {
       console.log(err);
     } else {
@@ -73,4 +76,3 @@ parser.parseString(xmlContent, function (err, result) {
     }
   })
 });
-

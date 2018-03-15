@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>databus web test</title>
+    <script src="./dist/bytebuffer.js"></script>
+    <script src="./dist/long.js"></script>
+    <script src="./dist/pako.js"></script>
+    <script src="./dist/protobuf.js"></script>
+    <script src="./cbusCommand.js"></script>
+    <script src="./cbusPackage.js"></script>
+    <script src="./cbusCore.js"></script>
+    <script src="./index.js"></script>
+</head>
+<body>
+    <button id="open" type="button">open</button>
+    <script>
+        var btn = document.getElementById('open');
+		cbus.setProtoFileDir('/databus/protobuf');
+        btn.onclick = function() {
+            cbus.open('47.100.7.224', '55555').then(json => {
+				alert(json);
+			}).catch(err => {
+				alert(err);
+			});
+		}
+    </script>
+</body>
+</html>

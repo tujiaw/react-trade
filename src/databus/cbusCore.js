@@ -1,20 +1,23 @@
-(function(global, factory) {
-/* CommonJS */ if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
-  module['exports'] = (function() {
-    var cbusPackage = require('./cbusPackage');
-    var ProtoBuf = require("protobufjs");
-    var Long = require("long");
-    ProtoBuf.util.Long = Long;
-    ProtoBuf.configure();
-    return factory(ProtoBuf, require('bytebuffer'), cbusPackage);
-  })();
-/* Global */ else
-  global["cbusCore"] = factory(
-    global.dcodeIO.ProtoBuf, 
-    global.dcodeIO.ByteBuffer,
-    global.cbusPackage,
-  );
-})(this, function(ProtoBuf, ByteBuffer, cbusPackage) {
+(function (global, factory) {
+  /* CommonJS */
+  if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
+    module['exports'] = (function () {
+      var cbusPackage = require('./cbusPackage');
+      var ProtoBuf = require("protobufjs");
+      var Long = require("long");
+      ProtoBuf.util.Long = Long;
+      ProtoBuf.configure();
+      return factory(ProtoBuf, require('bytebuffer'), cbusPackage);
+    })();
+  /* Global */
+  else
+    global["cbusCore"] = factory(
+      global.protobuf,
+      global.dcodeIO.ByteBuffer,
+      global.cbusPackage
+    );
+})(this, function (ProtoBuf, ByteBuffer, cbusPackage) {
+  var global = this;
   var ws = undefined;
   var serial = 65536;
   var protobufBuilders = {};
@@ -41,7 +44,7 @@
     pub(evt, args) {
       if (this.subscribers[evt]) {
         for (var i in this.subscribers[evt]) {
-          if (typeof(this.subscribers[evt][i]) === 'function') {
+          if (typeof (this.subscribers[evt][i]) === 'function') {
             if (arguments.length === 2) {
               this.subscribers[evt][i](args);
             } else {
@@ -75,14 +78,14 @@
     close: function () {
       if (ws) {
         console.log('close websocket');
-        ws.onopen = function() {}
-        ws.onmessage = function() {}
-        ws.onclose = function() {}
+        ws.onopen = function () {}
+        ws.onmessage = function () {}
+        ws.onclose = function () {}
         ws.close()
         ws = undefined
       }
     },
-    readyState: function() {
+    readyState: function () {
       if (ws) {
         return ws.readyState
       }
@@ -91,7 +94,7 @@
     reconnect: function (options) {
       this.connect(mIp, mPort, mPath, options);
     },
-    setReconnectIntervalSecond: function(second) {
+    setReconnectIntervalSecond: function (second) {
       reconnectIntervalSecond = second;
     },
     connect: function (ip, port, path, options) {
@@ -116,11 +119,10 @@
         return;
       }
 
-      // 处理老的推送方式
-      const handleOldPublish = function(p) {
+      const handleOldPublish = function (p) {
         Promise.all([
-            self.buildProtoObject("msgexpress", "MsgExpress.DataType"),
-            self.buildProtoObject("msgexpress", "MsgExpress.PublishData")
+          self.buildProtoObject("msgexpress", "MsgExpress.DataType"),
+          self.buildProtoObject("msgexpress", "MsgExpress.PublishData")
         ]).then(values => {
           const DataType = values[0].values
           const publishObj = values[1]
@@ -128,27 +130,40 @@
           if (msg && msg.item) {
             let content = []
             for (let j = 0; j < msg.item.length; j++) {
-                let item = msg.item[j];
-                let key = item.key;
-                let type = item.type;
-                let value = item.value[0];
-                if (type === DataType.STRING) { value = item.strVal[0]; } 
-                else if (type === DataType.INT64) { value = item.lVal[0]; } 
-                else if (type === DataType.UINT64) { value = item.ulVal[0]; }
-                else if (type === DataType.INT32) { value = item.iVal[0]; } 
-                else if (type === DataType.UINT32) { value = item.uiVal[0]; } 
-                else if (type === DataType.FLOAT) { value = item.fVal[0]; } 
-                else if (type === DataType.DOUBLE) { value = item.fVal[0]; } 
-                else if (type === DataType.DATETIME) { value = item.tVal[0]; } 
-                else if (type === DataType.BINARY) { value = item.rawVal[0].toString("binary"); }
-                  content.push({ key: key, value: value });
+              let item = msg.item[j];
+              let key = item.key;
+              let type = item.type;
+              let value = item.value[0];
+              if (type === DataType.STRING) {
+                value = item.strVal[0];
+              } else if (type === DataType.INT64) {
+                value = item.lVal[0];
+              } else if (type === DataType.UINT64) {
+                value = item.ulVal[0];
+              } else if (type === DataType.INT32) {
+                value = item.iVal[0];
+              } else if (type === DataType.UINT32) {
+                value = item.uiVal[0];
+              } else if (type === DataType.FLOAT) {
+                value = item.fVal[0];
+              } else if (type === DataType.DOUBLE) {
+                value = item.fVal[0];
+              } else if (type === DataType.DATETIME) {
+                value = item.tVal[0];
+              } else if (type === DataType.BINARY) {
+                value = item.rawVal[0].toString("binary");
               }
-              if (pushDataFactory && content.length) {
-                pushDataFactory(msg.topic, content);
-              }
+              content.push({
+                key: key,
+                value: value
+              });
             }
+            if (pushDataFactory && content.length) {
+              pushDataFactory(msg.topic, content);
+            }
+          }
         }).catch(err => {
-            console.error(err)
+          console.error(err)
         })
       }
 
@@ -160,7 +175,7 @@
           settings.onConnectSuccess();
         }
       };
-      
+
       ws.onmessage = function (evt) {
         if (typeof (evt.data) === "string") {
           console.log("Receive String Data");
@@ -171,7 +186,7 @@
         try {
           const bb = ByteBuffer.wrap(evt.data, "binary");
           packages = cbusPackage.decodePackage(bb);
-        } catch(err) {
+        } catch (err) {
           console.log(err)
           return;
         }
@@ -200,14 +215,14 @@
         if (reconnectIntervalSecond > 0) {
           // 间隔时间这次是上次的1.5倍
           const time = reconnectIntervalSecond * Math.pow(1.5, reconnectAttempts) * 1000;
-          setTimeout(function() {
+          setTimeout(function () {
             reconnectAttempts++;
             console.log('reconnect..., interval: ' + time + ', times:' + reconnectAttempts);
             self.connect(mIp, mPort, mPath, settings);
           }, time)
         }
       };
-      ws.onerror = function(event) {
+      ws.onerror = function (event) {
         console.log('websocket error', event);
         if (settings.onConnectError) {
           settings.onConnectError(event);
@@ -216,19 +231,17 @@
     },
 
     // 可以使用json格式直接初始化
-    addProtoBuilder: function(protoFileName, requireObj) {
+    addProtoBuilder: function (protoFileName, requireObj) {
       try {
         var root = ProtoBuf.Root.fromJSON(requireObj)
         protobufBuilders[protoFileName] = root
-      } catch(err) {
+      } catch (err) {
         console.error('addProtoBuilder error', protoFileName, err)
       }
     },
 
-    /**
-     * 构建一个protobuf包
-     */
-    buildProtoPackage: function(proto_package) {
+    // 构建一个protobuf包
+    buildProtoPackage: function (proto_package) {
       return new Promise((resolve, reject) => {
         if (protobufBuilders[proto_package]) {
           return resolve(protobufBuilders[proto_package])
@@ -247,10 +260,9 @@
         });
       })
     },
-    /**
-     * 构建一个protobuf对象
-     */
-    buildProtoObject: function(proto_package, proto_objectname) {
+
+    // 构建一个protobuf对象
+    buildProtoObject: function (proto_package, proto_objectname) {
       return new Promise((resolve, reject) => {
         const packageName = proto_package
         const objectName = proto_objectname
@@ -266,7 +278,8 @@
         })
       })
     },
-    requestOnce: function(cmd, proto_package, proto_request, proto_response, callback) {
+
+    requestOnce: function (cmd, proto_package, proto_request, proto_response, callback) {
       return this.buildProtoObject(proto_package, proto_request).then((obj) => {
         var payload = {}
         callback.fillRequest(payload);
@@ -293,14 +306,14 @@
       var pack;
       try {
         pack = cbusPackage.encodePackage(serialnum, cmd, byteBuffer);
-      } catch(err) {
+      } catch (err) {
         console.error(serialnum, cmd, err)
         return
       }
-      
+
       if (forever === undefined || !forever) {
         const self = this
-        this.subscribeInfo(PREFIX_DATABUS, serialnum, function(info, iserror) {
+        this.subscribeInfo(PREFIX_DATABUS, serialnum, function (info, iserror) {
           if (iserror === undefined || !iserror) { // 处理应答
             self.buildProtoObject(proto_package, proto_response).then(obj => {
               try {
@@ -310,7 +323,7 @@
                 console.error(proto_response, e)
               }
             })
-          } else if (callback.handlerError) {  // 处理错误
+          } else if (callback.handlerError) { // 处理错误
             self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
               try {
                 const msg = obj.decode(info.view);
@@ -363,7 +376,7 @@
       }
       return parent;
     },
-    setProtoFileDir: function(dir) {
+    setProtoFileDir: function (dir) {
       PROTO_FILE_DIR = dir
     }
   }
