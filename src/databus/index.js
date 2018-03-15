@@ -38,7 +38,7 @@
    * 
    * @param {string} proto_request 
    * @param {string} proto_response 
-   * @returns 
+   * @returns number
    */
   function getCommandFromProto(proto_request, proto_response) {
     proto_response = proto_response || 'MsgExpress.CommonResponse'
@@ -67,7 +67,7 @@
       }
     }
     console.error('getCommandFromProto error, request:' + proto_response + ', response:' + proto_response)
-    return null
+    return 0
   }
 
   /**

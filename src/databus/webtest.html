@@ -20,7 +20,8 @@
         var btn = document.getElementById('open');
 		cbus.setProtoFileDir('/databus/protobuf');
         btn.onclick = function() {
-            cbus.open('47.100.7.224', '55555').then(json => {
+            cbus.open('47.100.7.224', '55555')
+            .then(json => {
 				alert(json);
 			}).catch(err => {
 				alert(err);
