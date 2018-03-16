@@ -26,7 +26,7 @@ class App extends Component {
       }
     )
 
-    cbus.open('47.100.7.224', '55555')
+    cbus.open('ws://47.100.7.224:55555')
     .then((json) => {
       return cbus.subscribe([
         'StockServer.StockDataRequest, StockServer.StockDataResponse',

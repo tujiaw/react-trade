@@ -10,7 +10,7 @@
 })(this, function (databus, cbusCommand) {
   class AppClient {
     constructor(cmdParse) {
-      this._cmdParse = cmdParse;
+      this._cmdParse = cmdParse
       this._publishCallback = null
       this._subIdStart = 123
       this._clientName = 'test'
@@ -22,8 +22,8 @@
         onclose: () => {},
         onerror: () => {}
       }
-      this.setReconnectIntervalSecond();
-      this.setResponseTimeoutSecond();
+      this.setReconnectIntervalSecond()
+      this.setResponseTimeoutSecond()
     }
 
     /**
@@ -113,10 +113,10 @@
      * @returns Promise
      * @memberof AppClient
      */
-    open(wsip, wsport, wspath = '') {
+    open(wsurl) {
       const self = this
       return new Promise((resolve, reject) => {
-        databus.connect(wsip, wsport, wspath || '', {
+        databus.connect(wsurl, {
           onConnectSuccess: function () {
             self._event.onopen();
             databus.setPushDataFactory(function (topic, content) {
@@ -180,6 +180,7 @@
         auth: 'test'
       })
     }
+    
     /**
      * 批量订阅，支持新旧两种方式
      * 

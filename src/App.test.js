@@ -6,5 +6,5 @@ setTimeout(() => {
   console.log(end - start);
 }, 1000)
 
-
+console.log(Promise.resolve(100));
 

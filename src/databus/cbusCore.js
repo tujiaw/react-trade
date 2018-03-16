@@ -23,7 +23,7 @@
   var protobufBuilders = {};                // protobuf解析缓存
 
   var pushDataFactory = undefined;          // 处理推送的消息
-  var mIp, mPort, mPath;                    // 地址
+  var wsurl = '';                           // 地址
   var PREFIX_DATABUS = "DATABUS";           // 消息发送序号前缀
   var PROTO_FILE_DIR = '/protobuf/';        // proto文件所在目录
   var reconnectAttempts = 0;                // 尝试重连次数
@@ -65,7 +65,6 @@
       } else {
         this.subscribers[evt] = [obj];
       }
-      
       const fnNumber = this.subscribers[evt].length - 1;
       return '{"evt":"' + evt + '","fn":"' + fnNumber + '"}';
     }
@@ -121,32 +120,26 @@
       }
       return -1
     },
-    reconnect: function (options) {
-      this.connect(mIp, mPort, mPath, options);
-    },
     setReconnectIntervalSecond: function(second) {
       reconnectIntervalSecond = second;
     },
     setResponseTimeoutSecond: function(second) {
       responseTimeoutSecond = second;
     },
-    connect: function (ip, port, path, options) {
+    connect: function (url, options) {
       var self = this;
-      mIp = ip;
-      mPort = port;
-      mPath = path;
+      wsurl = url;
       var settings = {
         onConnectSuccess: undefined,
         onConnectError: undefined,
         onConnectClose: undefined
       };
       this.extend(settings, options);
-      var location = "ws://" + ip + ":" + port + path;
-      console.log('websocket connect to:' + location);
+      console.log('websocket connect to:' + wsurl);
       if (global.WebSocket) {
-        ws = new global.WebSocket(location);
+        ws = new global.WebSocket(wsurl);
       } else if (global.MozWebSocket) {
-        ws = new global.MozWebSocket(location);
+        ws = new global.MozWebSocket(wsurl);
       } else {
         console.log("No Support WebSocket...");
         return;
@@ -203,7 +196,7 @@
       ws.binaryType = "arraybuffer";
       ws.onopen = function () {
         reconnectAttempts = 0;
-        console.log("websocket connect success", ip, ":", port, path);
+        console.log("websocket connect success", wsurl);
         if (settings.onConnectSuccess) {
           settings.onConnectSuccess();
         }
@@ -239,6 +232,7 @@
           }
         }
       };
+
       ws.onclose = function (event) {
         console.log("websocket closed, code:" + event.code);
         if (settings.onConnectClose) {
@@ -251,7 +245,7 @@
           setTimeout(function () {
             reconnectAttempts++;
             console.log('reconnect..., interval: ' + time + ', times:' + reconnectAttempts);
-            self.connect(mIp, mPort, mPath, settings);
+            self.connect(wsurl, settings);
           }, time)
         }
       };
@@ -334,6 +328,7 @@
         return this.sendmsg(cmd, binary, proto_package, proto_response, callback, false);
       })
     },
+
     sendmsg: function (cmd, byteBuffer, proto_package, proto_response, callback, forever) {
       var serialnum = serial++;
       var pack;
