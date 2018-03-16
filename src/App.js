@@ -4,6 +4,7 @@ import cbus from './databus'
 class App extends Component {
   state = {
     error: '',
+    sendCount: 0,
     result: [],
   }
 
@@ -12,7 +13,7 @@ class App extends Component {
   }
 
   onLoginBus = () => {
-    cbus.setHeartBeatIntervalSecond(10)
+    cbus.setHeartBeatIntervalSecond(1)
     cbus.setEvent(
       function onopen() {
         console.log('on open', new Date().toLocaleTimeString());
@@ -56,6 +57,7 @@ class App extends Component {
   }
 
   onLoginTrader = () => {
+    this.setState({ sendCount: this.state.sendCount + 1 });
     cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
       userid: 'admin',
       passwd: 'admin',
@@ -86,8 +88,9 @@ class App extends Component {
         <button onClick={this.onSubAccount}>sub account</button>
         <button onClick={this.onClearResult}>clear</button>
         <div>
+          <div>发送消息:{this.state.sendCount}</div>
           <div>错误消息:{this.state.error}</div>
-          <div>应答结果：</div>
+          <div>应答结果：{this.state.result.length}</div>
           <ul>
             {this.state.result.map((item, index) => {
               return <li key={index}>{item}</li>

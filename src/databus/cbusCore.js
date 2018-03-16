@@ -17,59 +17,89 @@
       global.cbusPackage
     );
 })(this, function (ProtoBuf, ByteBuffer, cbusPackage) {
-  var global = this;
-  var ws = undefined;
-  var serial = 65536;
-  var protobufBuilders = {};
+  var global = this;                        // 当前环境
+  var ws = undefined;                       // WebSocket
+  var serial = 65536;                       // 发送消息的起始序号
+  var protobufBuilders = {};                // protobuf解析缓存
 
-  var pushDataFactory = undefined;
-  var mIp, mPort, mPath;
-  var PREFIX_DATABUS = "DATABUS";
-  var PROTO_FILE_DIR = '/protobuf/';
-  var reconnectAttempts = 0;
-  var reconnectIntervalSecond = 0;
+  var pushDataFactory = undefined;          // 处理推送的消息
+  var mIp, mPort, mPath;                    // 地址
+  var PREFIX_DATABUS = "DATABUS";           // 消息发送序号前缀
+  var PROTO_FILE_DIR = '/protobuf/';        // proto文件所在目录
+  var reconnectAttempts = 0;                // 尝试重连次数
+  var reconnectIntervalSecond = 0;          // 重连间隔
+  var responseTimeoutSecond = 0;            // 应答超时时间
 
   class Observer {
     constructor() {
-      this.subscribers = []; // 订阅者数组
+      this.subscribers = {}; // 订阅者对象
+      this.timeoutCheckerId = setInterval(() => {
+        const curTime = new Date().getTime();
+        for (const key in this.subscribers) {
+          const fnCount = this.subscribers[key].length;
+          let deleteCount = 0;
+          // 检查请求的对象为空或者应答超时
+          for (let i = 0; i < fnCount; i++) {
+            const fnObj = this.subscribers[key][i]
+            if (fnObj) {
+              if (responseTimeoutSecond > 0 && (curTime - fnObj.time > responseTimeoutSecond * 1000)) {
+                fnObj.fn('timeout', true);
+              }
+            } else {
+              deleteCount++;
+            }
+          }
+          // 删除已经处理的请求
+          if (fnCount === deleteCount) {
+            delete this.subscribers[key];
+          }
+        }
+      }, 1000);
     }
 
     // 订阅方法，返回订阅event标识符
     sub(evt, fn) {
-      this.subscribers[evt] ? this.subscribers[evt].push(fn) : (this.subscribers[evt] = []) && this.subscribers[evt].push(fn);
-      return '{"evt":"' + evt + '","fn":"' + (this.subscribers[evt].length - 1) + '"}';
+      const obj = { fn: fn, time: new Date().getTime() };
+      if (this.subscribers[evt]) {
+        this.subscribers[evt].push(obj);
+      } else {
+        this.subscribers[evt] = [obj];
+      }
+      
+      const fnNumber = this.subscribers[evt].length - 1;
+      return '{"evt":"' + evt + '","fn":"' + fnNumber + '"}';
     }
 
-    // 发布方法，成功后返回自身
+    // 发布方法
     pub(evt, args) {
-      if (this.subscribers[evt]) {
-        for (var i in this.subscribers[evt]) {
-          if (typeof (this.subscribers[evt][i]) === 'function') {
-            if (arguments.length === 2) {
-              this.subscribers[evt][i](args);
-            } else {
-              this.subscribers[evt][i](arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6]);
-            }
+      if (!this.subscribers[evt]) {
+        console.error('put not find, sn:' + evt);
+        return;
+      }
+
+      for (let i = 0, count = this.subscribers[evt].length; i < count; i++) {
+        const fnObj = this.subscribers[evt][i];
+        if (fnObj && (typeof fnObj.fn === 'function')) {
+          if (arguments.length === 2) {
+            fnObj.fn(args);
+          } else {
+            fnObj.fn(arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6])
           }
         }
-        return this;
       }
-      return false;
     }
 
     // 解除订阅，需传入订阅event标识符
     unsub(subId) {
       try {
         var id = JSON.parse(subId);
-        this.subscribers[id.evt][id.fn] = null;
-        delete this.subscribers[id.evt][id.fn];
+        if (this.subscribers[id.evt] && this.subscribers[id.evt][id.fn]) {
+          // console.log('unsub sn:' + id.evt + '.' + id.fn + ', cost:' + (new Date().getTime() - this.subscribers[id.evt][id.fn].time) + 'ms');
+          delete this.subscribers[id.evt][id.fn];
+        }
       } catch (err) {
         console.log(err);
       }
-    }
-
-    contains(evt) {
-      return this.subscribers[evt] ? true : false;
     }
   }
 
@@ -94,8 +124,11 @@
     reconnect: function (options) {
       this.connect(mIp, mPort, mPath, options);
     },
-    setReconnectIntervalSecond: function (second) {
+    setReconnectIntervalSecond: function(second) {
       reconnectIntervalSecond = second;
+    },
+    setResponseTimeoutSecond: function(second) {
+      responseTimeoutSecond = second;
     },
     connect: function (ip, port, path, options) {
       var self = this;
@@ -287,18 +320,18 @@
         var errMsg = obj.verify(payload);
         if (errMsg) {
           console.error('requestOnce verify err', errMsg, proto_request, payload)
-          throw Error(errMsg);
+          return Promise.reject('requestOnce verify err: ' + errMsg + ',' + proto_request)
         }
         // 创建消息对象
         var message = obj.create(payload); // or use .fromObject if conversion is necessary
-        console.log('requestOnce', message)
+        // console.log('requestOnce', message)
         // 编码二进制流
         var buffer = obj.encode(message).finish();
         // 一定要拷贝一份，否则byteOffset会一直累加（大概到250次）造成encodePackage错误
         buffer = new Uint8Array(buffer)
         // 包装成ByteBuffer
         var binary = ByteBuffer.wrap(buffer, "binary");
-        this.sendmsg(cmd, binary, proto_package, proto_response, callback, false);
+        return this.sendmsg(cmd, binary, proto_package, proto_response, callback, false);
       })
     },
     sendmsg: function (cmd, byteBuffer, proto_package, proto_response, callback, forever) {
@@ -308,7 +341,7 @@
         pack = cbusPackage.encodePackage(serialnum, cmd, byteBuffer);
       } catch (err) {
         console.error(serialnum, cmd, err)
-        return
+        return Promise.reject(err);
       }
 
       if (forever === undefined || !forever) {
@@ -324,19 +357,25 @@
               }
             })
           } else if (callback.handlerError) { // 处理错误
-            self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
-              try {
-                const msg = obj.decode(info.view);
-                callback.handlerError(msg);
-              } catch (e) {
-                console.error('ErrMessage', e)
-              }
-            })
+            if (info instanceof ByteBuffer) {
+              self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
+                try {
+                  const msg = obj.decode(info.view);
+                  callback.handlerError(msg);
+                } catch (e) {
+                  console.error('ErrMessage', e)
+                }
+              })
+            } else {
+              callback.handlerError(info);
+            }
           }
         });
       }
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(pack.toArrayBuffer());
+      } else {
+        return Promise.reject('websocket disconnect.')
       }
     },
     setPushDataFactory: function (factory) {
@@ -351,25 +390,6 @@
     },
     publishInfo: function (prefix, id, info, extra) {
       this.observer.pub(prefix + id, info, extra);
-    },
-    contains: function (id) {
-      return this.observer.contains(id);
-    },
-    requestPublishData: function (topic, callbacks) {
-      this.observer.sub(topic, function (args) {
-        if (arguments.length === 1) {
-          callbacks(args);
-        } else {
-          callbacks(arguments[0], arguments[1], arguments[2], arguments[3], arguments[4], arguments[5]);
-        }
-      });
-    },
-    notifyPublishData: function (topic, args) {
-      if (arguments.length === 2) {
-        this.observer.pub(topic, args);
-      } else {
-        this.observer.pub(topic, arguments[1], arguments[2], arguments[3], arguments[4], arguments[5], arguments[6]);
-      }
     },
     extend: function (parent, child) {
       for (var p in child) {

@@ -23,6 +23,7 @@
         onerror: () => {}
       }
       this.setReconnectIntervalSecond();
+      this.setResponseTimeoutSecond();
     }
 
     /**
@@ -76,7 +77,17 @@
      * @memberof AppClient
      */
     setReconnectIntervalSecond(second = 5) {
-      databus.setReconnectIntervalSecond(second)
+      databus.setReconnectIntervalSecond(second);
+    }
+
+    /**
+     * 设置应答超时
+     * 
+     * @param {number} [second=10] 
+     * @memberof AppClient
+     */
+    setResponseTimeoutSecond(second = 10) {
+      databus.setResponseTimeoutSecond(second);
     }
 
     /**
@@ -209,18 +220,6 @@
     }
 
     /**
-     * 回调推送的消息，用户不需要调用
-     * 
-     * @param {object} data 
-     * @memberof AppClient
-     */
-    onPublishCallback(data) {
-      if (this._publishCallback) {
-        this._publishCallback(data)
-      }
-    }
-
-    /**
      * 解析老的方式推送的消息
      * 
      * @param {string} protoFilename proto的名字
@@ -291,9 +290,10 @@
         const cmd = this._cmdParse.getCommandFromProto(protoRequest, protoResponse)
         if (!cmd) {
           console.error('command error, request:' + protoRequest + ', response:' + protoResponse)
-          return reject()
+          return reject('command error, request:' + protoRequest + ', response:' + protoResponse)
         }
-        console.log('postProto cmd:' + cmd + ', file:' + protoFilename + ', request:' + protoRequest + ', response:' + protoRequest)
+
+        //console.log('postProto cmd:' + cmd + ', file:' + protoFilename + ', request:' + protoRequest + ', response:' + protoRequest)
         databus.requestOnce(cmd, protoFilename, protoRequest, protoResponse, {
           fillRequest: function (request) {
             Object.assign(request, requestObj)
@@ -303,7 +303,7 @@
           },
           handlerError: function (err) {
             console.error(err)
-            return resolve(err)
+            return reject(err)
           }
         })
       })
@@ -353,6 +353,10 @@
      * @memberof AppClient
      */
     dispatchPublishMessage(topic, content) {
+      if (!this._publishCallback) {
+        return;
+      }
+
       const proto = this._cmdParse.getProtoFromCommand(topic)
       if (!proto || !content || !content.length) {
         console.log('get proto from command failed, topic:' + topic + ',content:' + content)
@@ -367,13 +371,13 @@
         // 老协议，如果定义了proto可以调用appClient.parsePublishMessage解析，否则用户自己去根据key-value解析
         data.old = true;
         data.content = content;
-        this.onPublishCallback(data)
+        this._publishCallback(data);
       } else {
         data.old = false;
         return databus.buildProtoObject(this._cmdParse.getProtoFilename(proto.request), proto.request).then(Msg => {
           try {
             data.content = Msg.decode(content)
-            this.onPublishCallback(data)
+            this._publishCallback(data);
           } catch (e) {
             console.log('dispatchPublishMessage', proto.request, e)
           }
