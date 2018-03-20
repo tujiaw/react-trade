@@ -9,11 +9,11 @@ class App extends Component {
   }
 
   handleDispatch = (data) => {
-    console.log(data)
+    console.log("handle dispatch", data)
   }
 
   onLoginBus = () => {
-    cbus.setHeartBeatIntervalSecond(1)
+    cbus.setHeartBeatIntervalSecond(5)
     cbus.setEvent(
       function onopen() {
         console.log('on open', new Date().toLocaleTimeString());
@@ -26,22 +26,17 @@ class App extends Component {
       }
     )
 
-    cbus.open('ws://47.100.7.224:55555')
+    cbus.open('ws://47.100.7.224:55555', [
+      'StockServer.StockDataRequest, StockServer.StockDataResponse',
+      'Trade.TradingAccount, MsgExpress.CommonResponse', 
+      'Trade.MarketData, MsgExpress.CommonResponse',
+      'Trade.Position, MsgExpress.CommonResponse',
+      'Trade.Order, MsgExpress.CommonResponse',
+      'Trade.Trade, MsgExpress.CommonResponse',
+      'Trade.ErrorInfo, MsgExpress.CommonResponse'
+    ])
     .then((json) => {
-      return cbus.subscribe([
-        'StockServer.StockDataRequest, StockServer.StockDataResponse',
-        'Trade.TradingAccount, MsgExpress.CommonResponse', 
-        'Trade.MarketData, MsgExpress.CommonResponse',
-        'Trade.Position, MsgExpress.CommonResponse',
-        'Trade.Order, MsgExpress.CommonResponse',
-        'Trade.Trade, MsgExpress.CommonResponse',
-        'Trade.ErrorInfo, MsgExpress.CommonResponse'
-      ], (data) => {
-        this.handleDispatch(data)
-      })
-    })
-    .then((json) => {
-      console.log('subscribe result', json)
+      console.log('11111', json);
       return cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
         userid: 'admin', 
         passwd: 'admin',

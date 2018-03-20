@@ -11,16 +11,24 @@
   class AppClient {
     constructor(cmdParse) {
       this._cmdParse = cmdParse
+      this._subscribeList = []
       this._publishCallback = null
       this._subIdStart = 123
       this._clientName = 'test'
       this._heartBeatTimer = 0
       this._hearBeatIntervalSecond = 5 // 心跳间隔5秒
-      this._addr = 0
       this._event = {
-        onopen: () => {},
-        onclose: () => {},
-        onerror: () => {}
+        onConnectSuccess: () => {},
+        onConnectClose: () => {},
+        onConnectError: () => {},
+        onReconnect: () => {
+          this.close();
+          this.open(databus.getUrl(), this._subscribeList).then(json => {
+            console.log('reconnect success', json);
+          }).catch(err => {
+            console.log('reconnect error', err);
+          })
+        }
       }
       this.setReconnectIntervalSecond()
       this.setResponseTimeoutSecond()
@@ -99,9 +107,19 @@
      * @memberof AppClient
      */
     setEvent(onopen, onclose, onerror) {
-      this._event.onopen = onopen;
-      this._event.onclose = onclose;
-      this._event.onerror = onerror;
+      this._event.onConnectSuccess = onopen;
+      this._event.onConnectClose = onclose;
+      this._event.onConnectError = onerror;
+    }
+
+    /**
+     * 设置推送回调
+     * 
+     * @param {function} onpublish = function({ topic: '', request: '', response: '', old: false, content: {}}) {}
+     * @memberof AppClient
+     */
+    setPublish(onpublish) {
+      this._publishCallback = onpublish;
     }
 
     /**
@@ -113,30 +131,47 @@
      * @returns Promise
      * @memberof AppClient
      */
-    open(wsurl) {
+    open(wsurl, subcribeList) {
       const self = this
+      this._subscribeList = subcribeList || [];
+      
       return new Promise((resolve, reject) => {
         databus.connect(wsurl, {
           onConnectSuccess: function () {
-            self._event.onopen();
+            databus.setConnectOptions(self._event);
+            self._event.onConnectSuccess();
+
             databus.setPushDataFactory(function (topic, content) {
               self.dispatchPublishMessage(topic, content)
             });
             self.startHeartBeat()
             self.loginBus().then((json) => {
-              self.addr = json.addr
-              console.log('login bus success', json)
-              return resolve('success')
-            }).catch((err) => {
+              console.log('login bus success', json);
+              if (self._subscribeList.length === 0) {
+                return resolve(json);
+              } else {
+                self.subscribe(self._subscribeList).then(json => {
+                  console.log('subscribe result', json);
+                  if (json.retcode === 0) {
+                    return resolve(json);
+                  } else {
+                    return reject(json);
+                  }
+                })
+              }
+            })
+            .catch((err) => {
               return reject(err)
             })
           },
           onConnectError: function (err) {
-            self._event.onerror(err);
+            databus.setConnectOptions(self._event);
+            self._event.onConnectError(err);
             return reject(err);
           },
           onConnectClose: function (err) {
-            self._event.onclose(err);
+            databus.setConnectOptions(self._event);
+            self._event.onConnectClose(err);
             return reject(err);
           }
         })
@@ -189,8 +224,7 @@
      * @returns promise MsgExpress.CommonResponse
      * @memberof AppClient
      */
-    subscribe(protoList, publishCallback) {
-      this._publishCallback = publishCallback;
+    subscribe(protoList) {
       return databus.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
         const objList = []
         for (let i = 0, count = protoList.length; i < count; i++) {
@@ -328,8 +362,10 @@
           memory: 0,
           sendqueue: 0,
           receivequeue: 0
-        }).then(() => {}).catch((err) => {
-          console.log(err)
+        }).then(() => {
+          console.log('recv heartbeat');
+        }).catch((err) => {
+          console.log('post heartbeat error', err)
         })
       }, this._hearBeatIntervalSecond * 1000)
     }

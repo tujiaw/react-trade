@@ -29,6 +29,12 @@
   var reconnectAttempts = 0;                // 尝试重连次数
   var reconnectIntervalSecond = 0;          // 重连间隔
   var responseTimeoutSecond = 0;            // 应答超时时间
+  var settings = {
+    onConnectSuccess: undefined,
+    onConnectError: undefined,
+    onConnectClose: undefined,
+    onReconnect: undefined
+  };
 
   class Observer {
     constructor() {
@@ -126,15 +132,21 @@
     setResponseTimeoutSecond: function(second) {
       responseTimeoutSecond = second;
     },
+    setConnectOptions: function(options) {
+      for (var p in options) {
+        if (settings[p]) {
+          delete settings[p];
+        }
+        settings[p] = options[p];
+      }
+    },
+    getUrl: function() {
+      return wsurl;
+    },
     connect: function (url, options) {
       var self = this;
       wsurl = url;
-      var settings = {
-        onConnectSuccess: undefined,
-        onConnectError: undefined,
-        onConnectClose: undefined
-      };
-      this.extend(settings, options);
+      this.setConnectOptions(options);
       console.log('websocket connect to:' + wsurl);
       if (global.WebSocket) {
         ws = new global.WebSocket(wsurl);
@@ -239,13 +251,13 @@
           settings.onConnectClose(event);
         }
 
-        if (reconnectIntervalSecond > 0) {
+        if (settings.onReconnect && reconnectIntervalSecond > 0) {
           // 间隔时间这次是上次的1.5倍
           const time = reconnectIntervalSecond * Math.pow(1.5, reconnectAttempts) * 1000;
           setTimeout(function () {
             reconnectAttempts++;
             console.log('reconnect..., interval: ' + time + ', times:' + reconnectAttempts);
-            self.connect(wsurl, settings);
+            settings.onReconnect();
           }, time)
         }
       };
@@ -385,12 +397,6 @@
     },
     publishInfo: function (prefix, id, info, extra) {
       this.observer.pub(prefix + id, info, extra);
-    },
-    extend: function (parent, child) {
-      for (var p in child) {
-        parent[p] = child[p];
-      }
-      return parent;
     },
     setProtoFileDir: function (dir) {
       PROTO_FILE_DIR = dir
