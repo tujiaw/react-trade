@@ -134,7 +134,7 @@
     open(wsurl, subcribeList) {
       const self = this
       this._subscribeList = subcribeList || [];
-      
+
       return new Promise((resolve, reject) => {
         databus.connect(wsurl, {
           onConnectSuccess: function () {
@@ -146,23 +146,19 @@
             });
             self.startHeartBeat()
             self.loginBus().then((json) => {
-              console.log('login bus success', json);
-              if (self._subscribeList.length === 0) {
-                return resolve(json);
-              } else {
-                self.subscribe(self._subscribeList).then(json => {
-                  console.log('subscribe result', json);
-                  if (json.retcode === 0) {
+                console.log('login bus success', json);
+                if (self._subscribeList.length === 0) {
+                  return resolve(json);
+                } else {
+                  self.subscribe(self._subscribeList).then(json => {
+                    console.log('subscribe result', json);
                     return resolve(json);
-                  } else {
-                    return reject(json);
-                  }
-                })
-              }
-            })
-            .catch((err) => {
-              return reject(err)
-            })
+                  })
+                }
+              })
+              .catch((err) => {
+                return reject(err)
+              })
           },
           onConnectError: function (err) {
             databus.setConnectOptions(self._event);
@@ -215,7 +211,7 @@
         auth: 'test'
       })
     }
-    
+
     /**
      * 批量订阅，支持新旧两种方式
      * 

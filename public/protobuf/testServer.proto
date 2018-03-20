@@ -1,0 +1,16 @@
+package TestServer;
+
+option java_package = "com.sumscope";
+option java_outer_classname = "TestServer";
+
+message HelloReq
+{
+	optional string name = 1;
+}
+
+message HelloRsp
+{
+	optional int32 code = 1;
+	optional string content = 2;
+}
+

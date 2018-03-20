@@ -35,28 +35,18 @@ class App extends Component {
       'Trade.Trade, MsgExpress.CommonResponse',
       'Trade.ErrorInfo, MsgExpress.CommonResponse'
     ])
-    .then((json) => {
-      console.log('11111', json);
-      return cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
-        userid: 'admin', 
-        passwd: 'admin',
-        instruments: ['IC1803', 'IF1803', 'IH1803', 'I1805']
-      })
-    })
-    .then((json) => {
-      console.log('login trade', json)
+    .then(json => {
+      console.log('----------');
     })
     .catch((err) => {
       console.log(JSON.stringify(err))
     })
   }
 
-  onLoginTrader = () => {
+  onHello = () => {
     this.setState({ sendCount: this.state.sendCount + 1 });
-    cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
-      userid: 'admin',
-      passwd: 'admin',
-      instruments: ['IC1803', 'IF1803', 'IH1803', 'i1805']
+    cbus.post('TestServer.HelloReq', 'TestServer.HelloRsp', {
+      name: 'hello, world!'
     })
     .then((json) => {
       const ls = [...this.state.result]
@@ -79,7 +69,7 @@ class App extends Component {
     return (
       <div className="App">
         <button onClick={this.onLoginBus}>login bus</button>
-        <button onClick={this.onLoginTrader}>login trader</button>
+        <button onClick={this.onHello}>hello</button>
         <button onClick={this.onSubAccount}>sub account</button>
         <button onClick={this.onClearResult}>clear</button>
         <div>

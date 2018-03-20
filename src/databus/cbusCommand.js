@@ -341,12 +341,33 @@
         }
       }
     ]
+  },
+  {
+    "$": {
+      "id": "320",
+      "name": "TestServer",
+      "desc": ""
+    },
+    "function": [
+      {
+        "$": {
+          "id": "1",
+          "request": "TestServer.HelloReq",
+          "response": "TestServer.HelloRsp",
+          "desc": ""
+        }
+      }
+    ]
   }
 ],
     ProtoFileList: [
   {
     "filename": "msgexpress",
     "package": "MsgExpress"
+  },
+  {
+    "filename": "testServer",
+    "package": "TestServer"
   },
   {
     "filename": "trade",
