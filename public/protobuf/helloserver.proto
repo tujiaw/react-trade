@@ -1,7 +1,7 @@
-package TestServer;
+package HelloServer;
 
 option java_package = "com.sumscope";
-option java_outer_classname = "TestServer";
+option java_outer_classname = "HelloServer";
 
 message HelloReq
 {
@@ -14,3 +14,8 @@ message HelloRsp
 	optional string content = 2;
 }
 
+message HelloSub
+{
+	optional string str1 = 1;
+	optional string str2 = 2;
+}

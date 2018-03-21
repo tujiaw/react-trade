@@ -5,15 +5,13 @@ class App extends Component {
   state = {
     error: '',
     sendCount: 0,
+    publishCount: 0,
     result: [],
+    repeatValue: 2000,
   }
 
-  handleDispatch = (data) => {
-    console.log("handle dispatch", data)
-  }
-
-  onLoginBus = () => {
-    cbus.setHeartBeatIntervalSecond(5)
+  componentDidMount() {
+    cbus.setHeartBeatIntervalSecond(20)
     cbus.setEvent(
       function onopen() {
         console.log('on open', new Date().toLocaleTimeString());
@@ -25,15 +23,16 @@ class App extends Component {
         console.log('on error', event, new Date().toLocaleTimeString());
       }
     )
+    cbus.setPublish((data) => {
+      this.setState({ publishCount: this.state.publishCount + 1 });
+      console.log('on publish:' + data.request);
+      const ls = [...this.state.result]
+      ls.push('publish msg, ' + JSON.stringify(data.content))
+      this.setState({ result: ls })
+    })
 
     cbus.open('ws://47.100.7.224:55555', [
-      'StockServer.StockDataRequest, StockServer.StockDataResponse',
-      'Trade.TradingAccount, MsgExpress.CommonResponse', 
-      'Trade.MarketData, MsgExpress.CommonResponse',
-      'Trade.Position, MsgExpress.CommonResponse',
-      'Trade.Order, MsgExpress.CommonResponse',
-      'Trade.Trade, MsgExpress.CommonResponse',
-      'Trade.ErrorInfo, MsgExpress.CommonResponse'
+      'HelloServer.HelloSub, MsgExpress.CommonResponse',
     ])
     .then(json => {
       console.log('----------');
@@ -43,12 +42,27 @@ class App extends Component {
     })
   }
 
+  componentWillUnmount() {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+    }
+  }
+
+  handleDispatch = (data) => {
+    console.log("handle dispatch", data)
+  }
+
   onHello = () => {
+    const startTime = new Date().getTime();
     this.setState({ sendCount: this.state.sendCount + 1 });
-    cbus.post('TestServer.HelloReq', 'TestServer.HelloRsp', {
-      name: 'hello, world!'
+    cbus.post('HelloServer.HelloReq', 'HelloServer.HelloRsp', {
+      name: '' + startTime
     })
     .then((json) => {
+      const serverRecvTime = parseInt(json.content);
+      const endTime = new Date().getTime();
+      console.log('end time', endTime);
+      json.content = `server recv cost: ${endTime - serverRecvTime}ms, total cost: ${endTime - startTime}ms`
       const ls = [...this.state.result]
       ls.push(JSON.stringify(json))
       this.setState({ result: ls })
@@ -58,24 +72,38 @@ class App extends Component {
     })
   }
 
-  onSubAccount = () => {
+  onRepeat = () => {
+    if (this.timerId) {
+      clearInterval(this.timerId);
+    }
+
+    this.timerId = setInterval(() => {
+      this.onHello();
+    }, this.state.repeatValue);
+
+    console.log(this.state.repeatValue);
   }
 
   onClearResult = () => {
-    this.setState({ error: '', result: [] })
+    this.setState({ error: '', sendCount: 0, publishCount: 0, result: [] })
   }
 
   render() {
     return (
-      <div className="App">
-        <button onClick={this.onLoginBus}>login bus</button>
+      <div style={styles.root}>
         <button onClick={this.onHello}>hello</button>
-        <button onClick={this.onSubAccount}>sub account</button>
+        <button onClick={this.onRepeat}>repeat</button>
+        <input defaultValue={this.state.repeatValue} onChange={(evt) => this.setState({repeatValue: evt.target.value })}
+        ></input>
         <button onClick={this.onClearResult}>clear</button>
-        <div>
-          <div>发送消息:{this.state.sendCount}</div>
-          <div>错误消息:{this.state.error}</div>
-          <div>应答结果：{this.state.result.length}</div>
+        
+        <div style={styles.content}>
+          <div style={styles.count}>
+            <div style={styles.countItem}>发送消息数：{this.state.sendCount}</div>
+            <div style={styles.countItem}>收到推送消息数：{this.state.publishCount}</div>
+            <div style={styles.countItem}>收到的总消息数：{this.state.result.length}</div>
+            <div style={styles.countItem}>错误消息：{this.state.error}</div>
+          </div>
           <ul>
             {this.state.result.map((item, index) => {
               return <li key={index}>{item}</li>
@@ -84,6 +112,20 @@ class App extends Component {
         </div>
       </div>
     );
+  }
+}
+
+const styles = {
+  root: {
+    margin: 10
+  },
+  count: {
+    display: 'flex',
+    flexDirection: 'row',
+    marginTop: 10,
+  },
+  countItem: {
+    marginRight: 10,
   }
 }
 

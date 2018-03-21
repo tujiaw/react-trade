@@ -13,7 +13,10 @@
 ```
 
 ## 生成Command.js文件
-使用cbusGenerateCommand.js将Command.xml转换成cbusCommand.js，node执行这个js即可，如：
+执行cbusGenerateCommand.js做两件事情：
+1. 将Command.xml转换为json写入cbusCommand.js;
+2. 读取protobuf目录下的.proto文件将package名字和proto文件名映射关系写入cbusCommand.js  
+node执行js，如：
 ```
 node cbusGenerateCommand.js
 ```

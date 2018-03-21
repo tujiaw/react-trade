@@ -61,8 +61,10 @@ parser.parseString(xmlContent, function (err, result) {
 
   // 删除先前的文件
   const dstFile = __dirname + '/cbusCommand.js';
-  fs.unlinkSync(dstFile);
-  console.log('---delete old cbusCommand.js---')
+  if (fs.existsSync(dstFile)) {
+    fs.unlinkSync(dstFile);
+    console.log('---delete old cbusCommand.js---')
+  }
 
   // 写入模板文件
   template = template.replace('%AppList%', JSON.stringify(appList, undefined, 2));

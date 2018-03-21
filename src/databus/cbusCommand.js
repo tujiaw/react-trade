@@ -345,15 +345,24 @@
   {
     "$": {
       "id": "320",
-      "name": "TestServer",
+      "name": "HelloServer",
       "desc": ""
     },
     "function": [
       {
         "$": {
           "id": "1",
-          "request": "TestServer.HelloReq",
-          "response": "TestServer.HelloRsp",
+          "request": "HelloServer.HelloReq",
+          "response": "HelloServer.HelloRsp",
+          "desc": ""
+        }
+      },
+      {
+        "$": {
+          "id": "2",
+          "request": "HelloServer.HelloSub",
+          "response": "MsgExpress.CommonResponse",
+          "ispublish": "true",
           "desc": ""
         }
       }
@@ -362,12 +371,12 @@
 ],
     ProtoFileList: [
   {
-    "filename": "msgexpress",
-    "package": "MsgExpress"
+    "filename": "helloserver",
+    "package": "HelloServer"
   },
   {
-    "filename": "testServer",
-    "package": "TestServer"
+    "filename": "msgexpress",
+    "package": "MsgExpress"
   },
   {
     "filename": "trade",
