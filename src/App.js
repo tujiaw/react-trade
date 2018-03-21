@@ -61,7 +61,6 @@ class App extends Component {
     .then((json) => {
       const serverRecvTime = parseInt(json.content);
       const endTime = new Date().getTime();
-      console.log('end time', endTime);
       json.content = `server recv cost: ${endTime - serverRecvTime}ms, total cost: ${endTime - startTime}ms`
       const ls = [...this.state.result]
       ls.push(JSON.stringify(json))
