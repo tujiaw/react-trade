@@ -1,10 +1,10 @@
 
 const start = new Date().getTime();
 
-setTimeout(() => {
-  const end = new Date().getTime();
-  console.log(end - start);
-}, 1000)
+function test(a) {
+  const x = a || false;
+  console.log(x)
+}
 
-console.log(Promise.resolve(100));
-
+test();
+test(true)

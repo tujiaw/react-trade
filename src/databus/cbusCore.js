@@ -16,6 +16,7 @@
   var ws = undefined; // WebSocket
   var serial = 65536; // 发送消息的起始序号
   var protobufBuilders = {}; // protobuf解析缓存
+  var forcedClose = false;   // 强制关闭，不进行重连
 
   var pushDataFactory = undefined; // 处理推送的消息
   var wsurl = ''; // 地址
@@ -358,7 +359,8 @@
    */
   var cbusCore = {
     observer: new Observer(),
-    close: function () {
+    close: function (forced) {
+      forcedClose = forced || false;
       if (ws) {
         console.log('close websocket');
         ws.onopen = function () {}
@@ -518,7 +520,7 @@
           settings.onConnectClose(event);
         }
 
-        if (settings.onReconnect && reconnectIntervalSecond > 0) {
+        if (!forcedClose && settings.onReconnect && reconnectIntervalSecond > 0) {
           // 间隔时间这次是上次的1.5倍
           const time = reconnectIntervalSecond * Math.pow(1.5, reconnectAttempts) * 1000;
           setTimeout(function () {

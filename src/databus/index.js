@@ -195,6 +195,16 @@
     }
 
     /**
+     * 强制关闭，不进行重连
+     * 
+     * @memberof AppClient
+     */
+    foreClose() {
+      this.closeHeartBeat()
+      databus.close(true);
+    }
+
+    /**
      * 登录总线，open成功后会自动登录，一般情况下用户不需要调用
      * 
      * @returns promise MsgExpress.LoginResponse
