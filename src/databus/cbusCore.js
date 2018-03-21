@@ -31,6 +31,11 @@
     onReconnect: undefined
   };
 
+  /**
+   * 暂存发送的消息，当消息发送时存储，收到消息后执行然后删除
+   * 
+   * @class Observer
+   */
   class Observer {
     constructor() {
       this.subscribers = {}; // 订阅者对象
@@ -57,8 +62,14 @@
         }
       }, 1000);
     }
-
-    // 订阅方法，返回订阅event标识符
+    /**
+     * 存储消息
+     * 
+     * @param {string} evt 唯一标识一个消息（如果消息被拆包，一个标识符存储多个消息，以数组的形式）
+     * @param {function} fn 应答后的回调
+     * @returns string 根据返回值可以找到此消息
+     * @memberof Observer
+     */
     sub(evt, fn) {
       const obj = {
         fn: fn,
@@ -72,8 +83,14 @@
       const fnNumber = this.subscribers[evt].length - 1;
       return '{"evt":"' + evt + '","fn":"' + fnNumber + '"}';
     }
-
-    // 发布方法
+    /**
+     * 响应应答，执行回调
+     * 
+     * @param {string} evt 消息标识符
+     * @param {any} args 多参数
+     * @returns null
+     * @memberof Observer
+     */
     pub(evt, args) {
       if (!this.subscribers[evt]) {
         console.error('put not find, sn:' + evt);
@@ -92,7 +109,12 @@
       }
     }
 
-    // 解除订阅，需传入订阅event标识符
+    /**
+     * 移除消息
+     * 
+     * @param {string} subId json字符串，sub方法返回的
+     * @memberof Observer
+     */
     unsub(subId) {
       try {
         var id = JSON.parse(subId);
@@ -106,6 +128,9 @@
     }
   }
 
+  /**
+   * 封包，拆包（包体除外，由protobufjs来处理）
+   */
   const cbusPackage = (function (ByteBuffer, pako) {
     var pack = function () {
       this.flag1 = pack.PACKAGE_START;
@@ -165,6 +190,12 @@
       return false
     }
 
+    /**
+     * 封包，头部30字节+包体
+     * @param {number} serialNum 流水号
+     * @param {number} command 指令，对应的某个请求
+     * @param {*} body 二进制包体
+     */
     pack.encodePackage = function (serialNum, command, body) {
       var pk = new pack();
       pk.setSerialNumber(serialNum);
@@ -187,10 +218,8 @@
       buffer.writeInt(pk.dstaddr);
       buffer.writeInt(pk.command);
       buffer.writeInt16(pk.shortCode);
-      if (pk.body != null) {
-        for (var i = 0; i < pk.body.limit; i++) {
-          buffer.writeByte(pk.body.readByte());
-        }
+      if (pk.body) {
+        pk.body.copyTo(buffer, buffer.offset, pk.body.offset, pk.body.limit)
       }
       buffer.offset = 0;
       return buffer;
@@ -225,13 +254,18 @@
       return packages;
     };
 
+    /**
+     * 拆包，先拆头部30个字节，获取包体大小，然后再获取包体的二进制流（后面会用protobuf来解析）
+     * @param {array} packages 传出值，存储解析后的包
+     * @param {ByteBuffer} buffer 二进制消息
+     */
     pack.decodePackageInternal = function (packages, buffer) {
       var i = 0;
       while (buffer.remaining() > 0) {
         if (buffer.remaining < pack.SIZE_OF_HEAD) {
           break;
         }
-        // read util 'P'
+        // 每个包的头两个字节都是80，即'P'
         if (!(buffer.readByte() === pack.PACKAGE_START && buffer.readByte() === pack.PACKAGE_START)) {
           continue;
         }
@@ -261,12 +295,17 @@
       return i;
     }
 
+    /**
+     * 拆包，如果有老的数据没有处理完成，加入到这次中进行处理
+     * @param {ByteBuffer} buffer 
+     */
     pack.decodePackage = function (buffer) {
       var packages = [];
       if (buffer === undefined || buffer.remaining() === 0) {
         return packages;
       }
       if (recData !== undefined && recData.remaining() > 0) {
+        console.log('old data, size:', recData.remaining())
         var buffers = [buffer, recData];
         var newBuffer = ByteBuffer.concat(buffers);
         recData = newBuffer;
@@ -282,6 +321,10 @@
       return packages;
     };
 
+    /**
+     * 解析包头 30字节
+     * @param {ByteBuffer} buffer 
+     */
     pack.decodeHeader = function (buffer) {
       var p = new pack();
       p.flag1 = buffer.readByte();
@@ -310,6 +353,9 @@
     return pack;
   })(ByteBuffer, pako);
 
+  /**
+   * 通信核心类
+   */
   var cbusCore = {
     observer: new Observer(),
     close: function () {
@@ -359,6 +405,10 @@
         return;
       }
 
+      /**
+       * 解析老的方式推送的包
+       * @param {package} p 
+       */
       const handleOldPublish = function (p) {
         Promise.all([
           self.buildProtoObject("msgexpress", "MsgExpress.DataType"),
@@ -407,7 +457,14 @@
         })
       }
 
+      /**
+       * 指定二进制数据类型
+       */
       ws.binaryType = "arraybuffer";
+
+      /**
+       * 连接打开
+       */
       ws.onopen = function () {
         reconnectAttempts = 0;
         console.log("websocket connect success", wsurl);
@@ -416,6 +473,10 @@
         }
       };
 
+      /**
+       * 收到消息
+       * @param {event} evt 
+       */
       ws.onmessage = function (evt) {
         if (typeof (evt.data) === "string") {
           console.log("Receive String Data");
@@ -447,6 +508,10 @@
         }
       };
 
+      /**
+       * 连接被关闭，等待重连
+       * @param {event} event 
+       */
       ws.onclose = function (event) {
         console.log("websocket closed, code:" + event.code);
         if (settings.onConnectClose) {
@@ -463,6 +528,11 @@
           }, time)
         }
       };
+
+      /**
+       * 连接出错
+       * @param {event} event 
+       */
       ws.onerror = function (event) {
         console.log('websocket error', event);
         if (settings.onConnectError) {
@@ -481,7 +551,7 @@
       }
     },
 
-    // 构建一个protobuf包
+    // 构建一个protobuf包，并缓存
     buildProtoPackage: function (proto_package) {
       return new Promise((resolve, reject) => {
         if (protobufBuilders[proto_package]) {
@@ -520,6 +590,7 @@
       })
     },
 
+    // 序列化包体
     requestOnce: function (cmd, proto_package, proto_request, proto_response, callback) {
       return this.buildProtoObject(proto_package, proto_request).then((obj) => {
         var payload = {}
@@ -543,6 +614,7 @@
       })
     },
 
+    // 序列化整个包，设置应答回调，发送消息
     sendmsg: function (cmd, byteBuffer, proto_package, proto_response, callback, forever) {
       var serialnum = serial++;
       var pack;

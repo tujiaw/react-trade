@@ -201,15 +201,16 @@
      * @memberof AppClient
      */
     loginBus() {
-      const self = this
-      return this.post('MsgExpress.LoginInfo', 'MsgExpress.LoginResponse', {
+      const loginData = {
         type: 1,
-        name: self._clientName,
+        name: this._clientName,
         group: 1,
-        uuid: 'rywyetyu24535',
-        starttime: 0,
+        uuid: guid(),
+        starttime: new Date().getTime(),
         auth: 'test'
-      })
+      }
+      console.log('login info', loginData);
+      return this.post('MsgExpress.LoginInfo', 'MsgExpress.LoginResponse', loginData)
     }
 
     /**
@@ -222,9 +223,9 @@
      */
     subscribe(protoList) {
       return databus.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
-        const objList = []
+        const objList = [];
         for (let i = 0, count = protoList.length; i < count; i++) {
-          let cmd = 0
+          let cmd = 0;
           if (isNaN(protoList[i])) {
             // proto中的协议名，新的订阅方式，如：StockServer.StockDataRequest, StockServer.StockDataResponse
             const arr = protoList[i].split(',');
@@ -235,13 +236,13 @@
             }
           } else {
             // Number老的订阅方式，如：267386881
-            cmd = protoList[i]
+            cmd = protoList[i];
           }
           if (cmd) {
-            const newObj = JSON.parse(JSON.stringify(obj))
-            newObj.subid = this._subIdStart++
-              newObj.topic = cmd
-            objList.push(newObj)
+            const newObj = JSON.parse(JSON.stringify(obj));
+            newObj.subid = this._subIdStart++;
+            newObj.topic = cmd;
+            objList.push(newObj);
           }
         }
         return this.post("MsgExpress.ComplexSubscribeData", "MsgExpress.CommonResponse", {
@@ -421,6 +422,15 @@
 
   function isArray(obj) {
     return Object.prototype.toString.call(obj) === '[object Array]';
+  }
+
+  function guid() {
+    function s4() {
+      return Math.floor((1 + Math.random()) * 0x10000)
+        .toString(16)
+        .substring(1);
+    }
+    return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
   }
 
   const CmdParse = function () {
