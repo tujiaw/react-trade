@@ -16,7 +16,6 @@
   class ClientBus {
     constructor() {
       this._cbusCore = new CBusCore()       // 通信核心
-      this._cmdParse = cmdParse             // command解析
       this._wsurlList = []                  // 连接地址列表
       this._lastConnectUrl = ''             // 最后一次连接的地址
       this._subscribeList = []              // 订阅列表
@@ -269,7 +268,7 @@
             // proto中的协议名，新的订阅方式，如：StockServer.StockDataRequest, StockServer.StockDataResponse
             const arr = protoList[i].split(',');
             if (arr.length === 2) {
-              cmd = this._cmdParse.getCommandFromProto(arr[0].trim(), arr[1].trim());
+              cmd = cmdParse.getCommandFromProto(arr[0].trim(), arr[1].trim());
             } else {
               console.error('subscribe params error', protoList[i]);
             }
@@ -343,7 +342,7 @@
      * @memberof ClientBus
      */
     post(protoRequest, protoResponse, requestObj) {
-      return this.postProto(this._cmdParse.getProtoFilename(protoRequest), protoRequest, protoResponse, requestObj)
+      return this.postProto(cmdParse.getProtoFilename(protoRequest), protoRequest, protoResponse, requestObj)
     }
 
     /**
@@ -359,7 +358,7 @@
     postProto(protoFilename, protoRequest, protoResponse, requestObj) {
       const self = this;
       return new Promise((resolve, reject) => {
-        const cmd = this._cmdParse.getCommandFromProto(protoRequest, protoResponse)
+        const cmd = cmdParse.getCommandFromProto(protoRequest, protoResponse)
         if (!cmd) {
           console.error('command error, request:' + protoRequest + ', response:' + protoResponse)
           return reject('command error, request:' + protoRequest + ', response:' + protoResponse)
@@ -479,7 +478,7 @@
         return;
       }
 
-      const proto = this._cmdParse.getProtoFromCommand(topic)
+      const proto = cmdParse.getProtoFromCommand(topic)
       if (!proto || !content || !content.length) {
         console.log('get proto from command failed, topic:' + topic + ',content:' + content)
         return
@@ -496,7 +495,7 @@
         this._publishCallback(data);
       } else {
         data.old = false;
-        return this._cbusCore.buildProtoObject(this._cmdParse.getProtoFilename(proto.request), proto.request).then(Msg => {
+        return this._cbusCore.buildProtoObject(cmdParse.getProtoFilename(proto.request), proto.request).then(Msg => {
           try {
             data.content = Msg.decode(content)
             this._publishCallback(data);
