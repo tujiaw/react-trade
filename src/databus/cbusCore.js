@@ -10,27 +10,12 @@
     })();
   /* Global */
   else
-    global["cbusCore"] = factory(global.protobuf, global.dcodeIO.ByteBuffer, global.pako);
+    global["CBusCore"] = factory(global.protobuf, global.dcodeIO.ByteBuffer, global.pako);
 })(this, function (ProtoBuf, ByteBuffer, pako) {
   var global = this; // 当前环境
-  var ws = undefined; // WebSocket
-  var serial = 65536; // 发送消息的起始序号
-  var protobufBuilders = {}; // protobuf解析缓存
-  var forcedClose = false;   // 强制关闭，不进行重连
-
-  var pushDataFactory = undefined; // 处理推送的消息
-  var wsurl = ''; // 地址
+  var g_serial = 65536; // 发送消息的起始序号
+  var g_protobufBuilders = {}; // protobuf解析缓存
   var PREFIX_DATABUS = "DATABUS"; // 消息发送序号前缀
-  var PROTO_FILE_DIR = '/protobuf/'; // proto文件所在目录
-  var reconnectAttempts = 0; // 尝试重连次数
-  var reconnectIntervalSecond = 0; // 重连间隔
-  var responseTimeoutSecond = 0; // 应答超时时间
-  var settings = {
-    onConnectSuccess: undefined,
-    onConnectError: undefined,
-    onConnectClose: undefined,
-    onReconnect: undefined
-  };
 
   /**
    * 暂存发送的消息，当消息发送时存储，收到消息后执行然后删除
@@ -39,7 +24,9 @@
    */
   class Observer {
     constructor() {
-      this.subscribers = {}; // 订阅者对象
+      this.responseTimeout = 0;     // 应答超时时间
+      this.subscribers = {};        // 订阅者对象
+
       this.timeoutCheckerId = setInterval(() => {
         const curTime = new Date().getTime();
         for (const key in this.subscribers) {
@@ -49,7 +36,7 @@
           for (let i = 0; i < fnCount; i++) {
             const fnObj = this.subscribers[key][i]
             if (fnObj) {
-              if (responseTimeoutSecond > 0 && (curTime - fnObj.time > responseTimeoutSecond * 1000)) {
+              if (this.responseTimeout > 0 && (curTime - fnObj.time > this.responseTimeout * 1000)) {
                 fnObj.fn('timeout', true);
               }
             } else {
@@ -63,6 +50,10 @@
         }
       }, 1000);
     }
+    setResponseTimeoutSecond(second) {
+      this.responseTimeout = second;
+    }
+
     /**
      * 存储消息
      * 
@@ -132,7 +123,7 @@
   /**
    * 封包，拆包（包体除外，由protobufjs来处理）
    */
-  const cbusPackage = (function (ByteBuffer, pako) {
+  const cbusPackage = (function(ByteBuffer, pako) {
     var pack = function () {
       this.flag1 = pack.PACKAGE_START;
       this.flag2 = pack.PACKAGE_START;
@@ -357,53 +348,60 @@
   /**
    * 通信核心类
    */
-  var cbusCore = {
-    observer: new Observer(),
-    close: function (forced) {
-      forcedClose = forced || false;
-      if (ws) {
-        console.log('close websocket');
-        ws.onopen = function () {}
-        ws.onmessage = function () {}
-        ws.onclose = function () {}
-        ws.close()
-        ws = undefined
+  class CBusCore {
+    constructor() {
+      this.ws = undefined;                        // WebSocket
+      this.enableReconnect = false;                  // 是否可以进行重连
+      this.pushDataFactory = undefined;           // 处理推送的消息
+      this.PROTO_FILE_DIR = '/protobuf/';         // proto文件所在目录
+      this.settings = {
+        onConnectSuccess: undefined,
+        onConnectError: undefined,
+        onConnectClose: undefined
+      };
+      this.observer = new Observer();
+    }
+    
+    close() {
+      if (this.ws) {
+        this.ws.onopen = function () {}
+        this.ws.onmessage = function () {}
+        this.ws.onclose = function () {}
+        this.ws.close()
+        this.ws = undefined
       }
-    },
-    readyState: function () {
-      if (ws) {
-        return ws.readyState
+    }
+
+    readyState() {
+      if (this.ws) {
+        return this.ws.readyState
       }
       return -1
-    },
-    setReconnectIntervalSecond: function (second) {
-      reconnectIntervalSecond = second;
-    },
-    setResponseTimeoutSecond: function (second) {
-      responseTimeoutSecond = second;
-    },
-    setConnectOptions: function (options) {
-      for (var p in options) {
-        if (settings[p]) {
-          delete settings[p];
+    }
+
+    setResponseTimeoutSecond(second) {
+      this.observer.setResponseTimeoutSecond(second);
+    }
+
+    setConnectOptions(opts) {
+      for (var p in opts) {
+        if (this.settings[p]) {
+          delete this.settings[p];
         }
-        settings[p] = options[p];
+        this.settings[p] = opts[p];
       }
-    },
-    getUrl: function () {
-      return wsurl;
-    },
-    connect: function (url, options) {
+    }
+
+    connect(wsurl, opts) {
       var self = this;
-      wsurl = url;
-      this.setConnectOptions(options);
+      this.setConnectOptions(opts);
       console.log('websocket connect to:' + wsurl);
       if (global.WebSocket) {
-        ws = new global.WebSocket(wsurl);
+        this.ws = new global.WebSocket(wsurl);
       } else if (global.MozWebSocket) {
-        ws = new global.MozWebSocket(wsurl);
+        this.ws = new global.MozWebSocket(wsurl);
       } else {
-        console.log("No Support WebSocket...");
+        console.log("No Support WebSocket..."); // fixme
         return;
       }
 
@@ -450,8 +448,8 @@
                 value: value
               });
             }
-            if (pushDataFactory && content.length) {
-              pushDataFactory(msg.topic, content);
+            if (self.pushDataFactory && content.length) {
+              self.pushDataFactory(msg.topic, content);
             }
           }
         }).catch(err => {
@@ -462,16 +460,15 @@
       /**
        * 指定二进制数据类型
        */
-      ws.binaryType = "arraybuffer";
+      this.ws.binaryType = "arraybuffer";
 
       /**
        * 连接打开
        */
-      ws.onopen = function () {
-        reconnectAttempts = 0;
-        console.log("websocket connect success", wsurl);
-        if (settings.onConnectSuccess) {
-          settings.onConnectSuccess();
+      this.ws.onopen = function () {
+        console.log("websocket connect success");
+        if (self.settings.onConnectSuccess) {
+          self.settings.onConnectSuccess();
         }
       };
 
@@ -479,7 +476,7 @@
        * 收到消息
        * @param {event} evt 
        */
-      ws.onmessage = function (evt) {
+      this.ws.onmessage = function (evt) {
         if (typeof (evt.data) === "string") {
           console.log("Receive String Data");
           return;
@@ -498,8 +495,8 @@
           const p = packages[i];
           if (p.getType() === cbusPackage.Publish) {
             if (p.isPublishNewMsg()) {
-              if (pushDataFactory) {
-                pushDataFactory(p.getCommand(), p.body.view)
+              if (self.pushDataFactory) {
+                self.pushDataFactory(p.getCommand(), p.body.view)
               }
             } else {
               handleOldPublish(p)
@@ -514,20 +511,10 @@
        * 连接被关闭，等待重连
        * @param {event} event 
        */
-      ws.onclose = function (event) {
+      this.ws.onclose = function (event) {
         console.log("websocket closed, code:" + event.code);
-        if (settings.onConnectClose) {
-          settings.onConnectClose(event);
-        }
-
-        if (!forcedClose && settings.onReconnect && reconnectIntervalSecond > 0) {
-          // 间隔时间这次是上次的1.5倍
-          const time = reconnectIntervalSecond * Math.pow(1.5, reconnectAttempts) * 1000;
-          setTimeout(function () {
-            reconnectAttempts++;
-            console.log('reconnect..., interval: ' + time + ', times:' + reconnectAttempts);
-            settings.onReconnect();
-          }, time)
+        if (self.settings.onConnectClose) {
+          self.settings.onConnectClose(event);
         }
       };
 
@@ -535,47 +522,47 @@
        * 连接出错
        * @param {event} event 
        */
-      ws.onerror = function (event) {
+      this.ws.onerror = function (event) {
         console.log('websocket error', event);
-        if (settings.onConnectError) {
-          settings.onConnectError(event);
+        if (self.settings.onConnectError) {
+          self.settings.onConnectError(event);
         }
       }
-    },
+    }
 
     // 可以使用json格式直接初始化
-    addProtoBuilder: function (protoFileName, requireObj) {
+    addProtoBuilder(protoFileName, requireObj) {
       try {
         var root = ProtoBuf.Root.fromJSON(requireObj)
-        protobufBuilders[protoFileName] = root
+        g_protobufBuilders[protoFileName] = root
       } catch (err) {
         console.error('addProtoBuilder error', protoFileName, err)
       }
-    },
+    }
 
     // 构建一个protobuf包，并缓存
-    buildProtoPackage: function (proto_package) {
+    buildProtoPackage(proto_package) {
       return new Promise((resolve, reject) => {
-        if (protobufBuilders[proto_package]) {
-          return resolve(protobufBuilders[proto_package])
+        if (g_protobufBuilders[proto_package]) {
+          return resolve(g_protobufBuilders[proto_package])
         }
 
-        if (PROTO_FILE_DIR[PROTO_FILE_DIR.length - 1] !== '/') {
-          PROTO_FILE_DIR += '/'
+        if (this.PROTO_FILE_DIR[this.PROTO_FILE_DIR.length - 1] !== '/') {
+          this.PROTO_FILE_DIR += '/'
         }
-        const protoFilePath = PROTO_FILE_DIR + proto_package + ".proto"
+        const protoFilePath = this.PROTO_FILE_DIR + proto_package + ".proto"
         ProtoBuf.load(protoFilePath).then((root) => {
-          protobufBuilders[proto_package] = root;
+          g_protobufBuilders[proto_package] = root;
           return resolve(root)
         }).catch((err) => {
           console.error('buildProtoPackage ', proto_package, err, protoFilePath)
           return reject(err)
         });
       })
-    },
+    }
 
     // 构建一个protobuf对象
-    buildProtoObject: function (proto_package, proto_objectname) {
+    buildProtoObject(proto_package, proto_objectname) {
       return new Promise((resolve, reject) => {
         const packageName = proto_package
         const objectName = proto_objectname
@@ -590,10 +577,10 @@
           return reject(errStr)
         })
       })
-    },
+    }
 
     // 序列化包体
-    requestOnce: function (cmd, proto_package, proto_request, proto_response, callback) {
+    requestOnce(cmd, proto_package, proto_request, proto_response, callback) {
       return this.buildProtoObject(proto_package, proto_request).then((obj) => {
         var payload = {}
         callback.fillRequest(payload);
@@ -614,11 +601,11 @@
         var binary = ByteBuffer.wrap(buffer, "binary");
         return this.sendmsg(cmd, binary, proto_package, proto_response, callback, false);
       })
-    },
+    }
 
     // 序列化整个包，设置应答回调，发送消息
-    sendmsg: function (cmd, byteBuffer, proto_package, proto_response, callback, forever) {
-      var serialnum = serial++;
+    sendmsg(cmd, byteBuffer, proto_package, proto_response, callback, forever) {
+      var serialnum = g_serial++;
       var pack;
       try {
         pack = cbusPackage.encodePackage(serialnum, cmd, byteBuffer);
@@ -627,56 +614,60 @@
         return Promise.reject(err);
       }
 
-      if (forever === undefined || !forever) {
-        const self = this
-        this.subscribeInfo(PREFIX_DATABUS, serialnum, function (info, iserror) {
-          if (iserror === undefined || !iserror) { // 处理应答
-            self.buildProtoObject(proto_package, proto_response).then(obj => {
-              try {
-                const msg = obj.decode(info.view);
-                callback.handleResponse(msg);
-              } catch (e) {
-                console.error(proto_response, e)
-              }
-            })
-          } else if (callback.handlerError) { // 处理错误
-            if (info instanceof ByteBuffer) {
-              self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        if (forever === undefined || !forever) {
+          const self = this
+          this.subscribeInfo(PREFIX_DATABUS, serialnum, function (info, iserror) {
+            if (iserror === undefined || !iserror) { // 处理应答
+              self.buildProtoObject(proto_package, proto_response).then(obj => {
                 try {
                   const msg = obj.decode(info.view);
-                  callback.handlerError(msg);
+                  callback.handleResponse(msg);
                 } catch (e) {
-                  console.error('ErrMessage', e)
+                  console.error(proto_response, e)
                 }
               })
-            } else {
-              callback.handlerError(info);
+            } else if (callback.handlerError) { // 处理错误
+              if (info instanceof ByteBuffer) {
+                self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
+                  try {
+                    const msg = obj.decode(info.view);
+                    callback.handlerError(msg);
+                  } catch (e) {
+                    console.error('ErrMessage', e)
+                  }
+                })
+              } else {
+                callback.handlerError(info);
+              }
             }
-          }
-        });
-      }
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(pack.toArrayBuffer());
+          });
+        }
+        this.ws.send(pack.toArrayBuffer());
       } else {
         return Promise.reject('websocket disconnect.')
       }
-    },
-    setPushDataFactory: function (factory) {
-      pushDataFactory = factory;
-    },
-    subscribeInfo: function (prefix, id, callback) {
+    }
+
+    setPushDataFactory(factory) {
+      this.pushDataFactory = factory;
+    }
+
+    subscribeInfo(prefix, id, callback) {
       var self = this;
       var subId = this.observer.sub(prefix + id, function (info, extra) {
         callback(info, extra);
         self.observer.unsub(subId);
       });
-    },
-    publishInfo: function (prefix, id, info, extra) {
+    }
+
+    publishInfo(prefix, id, info, extra) {
       this.observer.pub(prefix + id, info, extra);
-    },
-    setProtoFileDir: function (dir) {
-      PROTO_FILE_DIR = dir
+    }
+
+    setProtoFileDir(dir) {
+      this.PROTO_FILE_DIR = dir
     }
   }
-  return cbusCore;
+  return CBusCore;
 });

@@ -1,4 +1,5 @@
 # web使用方式
+可以看webtest.html demo   
 直接将databus目录拷贝到tomcat中webapps目录下，在浏览器上访问http://localhost:8080/databus/webtest.html，点击登录按钮弹出success表示成功，也可以看控制台日志
 
 # react使用方式
@@ -26,45 +27,35 @@ node cbusGenerateCommand.js
 ```
 import appClient from '../databus'
 
-// 连接并初始化
-appClient.open(config.wsip, config.wsport)
-  .then((json) => {
-    return appClient.subscribe([
-      'StockServer.StockDataRequest, StockServer.StockDataResponse',
-      'Trade.TradingAccount, MsgExpress.CommonResponse',
-      'Trade.MarketData, MsgExpress.CommonResponse',
-      'Trade.Position, MsgExpress.CommonResponse',
-      'Trade.Order, MsgExpress.CommonResponse',
-      'Trade.Trade, MsgExpress.CommonResponse',
-      'Trade.ErrorInfo, MsgExpress.CommonResponse'
-    ], (data) => {
-      // 处理推送
-      this.handleDispatch(data)
-    })
-  })
-  .then((json) => {
-    console.log('subscribe result', json)
-    return appClient.post('Trade.LoginReq', 'Trade.LoginResp', {
-      userid: config.username,
-      passwd: config.password,
-      instruments: config.codeList
-    })
-  })
-  .then((json) => {
-    console.log('login trade', json)
-    resolve(json)
-  })
-  .catch((err) => {
-    console.log(JSON.stringify(err))
-    reject(err)
-  })
+// 设置推送回调
+cbus.setPublish((data) => {
+  this.setState({ publishCount: this.state.publishCount + 1 });
+  console.log('on publish:' + data.request);
+  const ls = [...this.state.result]
+  ls.push('publish msg, ' + JSON.stringify(data.content))
+  this.setState({ result: ls })
+})
+
+// 打开连接（内部会自动登录总线和订阅）
+cbus.open('ws://47.100.7.224:55555', [
+  'HelloServer.HelloSub, MsgExpress.CommonResponse',
+])
+.then(json => {
+  console.log('----------');
+})
+.catch((err) => {
+  console.log(JSON.stringify(err))
+})
 
 // 发送消息
-appClient.post('Trade.ModifyReq', 'Trade.ModifyResp', {
-  orderid: orderId,
-  price: price
-}).then(json => {
-  // 应答
+cbus.post('HelloServer.HelloReq', 'HelloServer.HelloRsp', {
+  name: 'hello'
+})
+.then((json) => {
+  console.log(json);
+})
+.catch((err) => {
+  console.log(err)
 })
 ```
 

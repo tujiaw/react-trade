@@ -11,7 +11,7 @@ class App extends Component {
   }
 
   componentDidMount() {
-    cbus.setHeartBeatIntervalSecond(20)
+    cbus.setHeartBeatIntervalSecond(10)
     cbus.setEvent(
       function onopen() {
         console.log('on open', new Date().toLocaleTimeString());
@@ -31,14 +31,13 @@ class App extends Component {
       this.setState({ result: ls })
     })
 
-    cbus.open('ws://47.100.7.224:55555', [
-      'HelloServer.HelloSub, MsgExpress.CommonResponse',
-    ])
-    .then(json => {
-      console.log('----------');
-    })
-    .catch((err) => {
-      console.log(JSON.stringify(err))
+    cbus.open(
+      ['ws://172.16.66.187:1111', 'ws://172.16.66.87:1111'], 
+      ['HelloServer.HelloSub, MsgExpress.CommonResponse']
+    ).then(json => {
+      console.log(json);
+    }).catch(err => {
+      console.log('open failed', err);
     })
   }
 
@@ -87,6 +86,10 @@ class App extends Component {
     this.setState({ error: '', sendCount: 0, publishCount: 0, result: [] })
   }
 
+  onClose = () => {
+    cbus.close();
+  }
+
   render() {
     return (
       <div style={styles.root}>
@@ -95,6 +98,7 @@ class App extends Component {
         <input defaultValue={this.state.repeatValue} onChange={(evt) => this.setState({repeatValue: evt.target.value })}
         ></input>
         <button onClick={this.onClearResult}>clear</button>
+        <button onClick={this.onClose}>close</button>
         
         <div style={styles.content}>
           <div style={styles.count}>

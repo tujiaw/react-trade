@@ -6,11 +6,19 @@
     })();
   /* Global */
   else
-    global["cbus"] = factory(global.cbusCore, global.cbusCommand);
-})(this, function (databus, cbusCommand) {
+    global["cbus"] = factory(global.CBusCore, global.cbusCommand);
+})(this, function (CBusCore, cbusCommand) {
+  const CmdParse = function () {
+    this.commandCache = {}
+  }
+  const cmdParse = new CmdParse();
+
   class AppClient {
-    constructor(cmdParse) {
+    constructor() {
+      this._cbusCore = new CBusCore()
       this._cmdParse = cmdParse
+      this._wsurlList = []
+      this._lastConnectUrl = ''
       this._subscribeList = []
       this._publishCallback = null
       this._subIdStart = 123
@@ -21,16 +29,7 @@
         onConnectSuccess: () => {},
         onConnectClose: () => {},
         onConnectError: () => {},
-        onReconnect: () => {
-          this.close();
-          this.open(databus.getUrl(), this._subscribeList).then(json => {
-            console.log('reconnect success', json);
-          }).catch(err => {
-            console.log('reconnect error', err);
-          })
-        }
       }
-      this.setReconnectIntervalSecond()
       this.setResponseTimeoutSecond()
     }
 
@@ -55,13 +54,13 @@
     }
 
     /**
-     * 设置proto文件所在目录，默认在同级目录
+     * 设置proto文件所在目录，默认在同级目录下的protobuf目录
      * 
      * @param {string} dir 
      * @memberof AppClient
      */
     setProtoFileDir(dir) {
-      databus.setProtoFileDir(dir)
+      this._cbusCore.setProtoFileDir(dir)
     }
 
     /**
@@ -73,19 +72,9 @@
     initProtoJson(jsonObjList) {
       jsonObjList.forEach(item => {
         if (item.name && item.json) {
-          databus.addProtoBuilder(item.name, item.json)
+          this._cbusCore.addProtoBuilder(item.name, item.json)
         }
       })
-    }
-
-    /**
-     * 设置重连间隔秒数
-     * 
-     * @param {number} [second=5] 
-     * @memberof AppClient
-     */
-    setReconnectIntervalSecond(second = 5) {
-      databus.setReconnectIntervalSecond(second);
     }
 
     /**
@@ -95,7 +84,7 @@
      * @memberof AppClient
      */
     setResponseTimeoutSecond(second = 10) {
-      databus.setResponseTimeoutSecond(second);
+      this._cbusCore.setResponseTimeoutSecond(second);
     }
 
     /**
@@ -123,7 +112,17 @@
     }
 
     /**
-     * 打开连接，登录总线
+     * 创建一个新的对象
+     * 
+     * @returns 
+     * @memberof AppClient
+     */
+    create() {
+      return new AppClient();
+    }
+
+    /**
+     * 打开连接，登录总线，使用多个IP进行尝试，如果都失败才返回失败
      * 
      * @param {string} wsip 地址
      * @param {string | number} wsport 端口
@@ -132,46 +131,65 @@
      * @memberof AppClient
      */
     open(wsurl, subcribeList) {
-      const self = this
+      const self = this;
+      this._wsurlList = isArray(wsurl) ? wsurl : [wsurl];
       this._subscribeList = subcribeList || [];
 
-      return new Promise((resolve, reject) => {
-        databus.connect(wsurl, {
-          onConnectSuccess: function () {
-            databus.setConnectOptions(self._event);
-            self._event.onConnectSuccess();
-
-            databus.setPushDataFactory(function (topic, content) {
-              self.dispatchPublishMessage(topic, content)
-            });
-            self.startHeartBeat()
-            self.loginBus().then((json) => {
-                console.log('login bus success', json);
+      const go = () => {
+        return new Promise((resolve, reject) => {
+          this._cbusCore.connect(this.pickUrl(), {
+            onConnectSuccess: function () {
+              self._cbusCore.setConnectOptions(self._event);
+              self._event.onConnectSuccess();
+              self._cbusCore.setPushDataFactory(function (topic, content) {
+                self.dispatchPublishMessage(topic, content)
+              });
+              self.loginBus().then((json) => {
                 if (self._subscribeList.length === 0) {
                   return resolve(json);
                 } else {
                   self.subscribe(self._subscribeList).then(json => {
-                    console.log('subscribe result', json);
-                    return resolve(json);
+                    if (json.retcode === 0) {
+                      return resolve(json);
+                    }
+                    return reject((json.msg && json.msg.length) ? json.msg : 'subscribe failed');
+                  }).catch(err => {
+                    return reject(err);
                   })
                 }
               })
               .catch((err) => {
                 return reject(err)
               })
-          },
-          onConnectError: function (err) {
-            databus.setConnectOptions(self._event);
-            self._event.onConnectError(err);
-            return reject(err);
-          },
-          onConnectClose: function (err) {
-            databus.setConnectOptions(self._event);
-            self._event.onConnectClose(err);
-            return reject(err);
-          }
+            },
+            onConnectError: function (err) {
+              self._cbusCore.setConnectOptions(self._event);
+              self._event.onConnectError(err);
+              return reject(err);
+            },
+            onConnectClose: function (err) {
+              self._cbusCore.setConnectOptions(self._event);
+              self._event.onConnectClose(err);
+              return reject(err);
+            }
+          })
         })
-      })
+      }
+
+      const loop = (failedCount, failedMsg) => {
+        self._cbusCore.close();
+        if (failedCount === self._wsurlList.length) {
+          return Promise.reject(failedMsg);
+        } else {
+          return go().then(() => {
+            self.startHeartBeat();
+            return Promise.resolve('success');
+          }).catch((msg) => {
+            return loop(++failedCount, msg);
+          })
+        }
+      }
+      return loop(0);
     }
 
     /**
@@ -181,7 +199,7 @@
      * @memberof AppClient
      */
     readyState() {
-      return databus.readyState()
+      return this._cbusCore.readyState()
     }
 
     /**
@@ -191,17 +209,7 @@
      */
     close() {
       this.closeHeartBeat()
-      databus.close()
-    }
-
-    /**
-     * 强制关闭，不进行重连
-     * 
-     * @memberof AppClient
-     */
-    foreClose() {
-      this.closeHeartBeat()
-      databus.close(true);
+      this._cbusCore.close()
     }
 
     /**
@@ -232,7 +240,7 @@
      * @memberof AppClient
      */
     subscribe(protoList) {
-      return databus.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
+      return this._cbusCore.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
         const objList = [];
         for (let i = 0, count = protoList.length; i < count; i++) {
           let cmd = 0;
@@ -292,7 +300,7 @@
           bb[i] = arr[i]
         }
 
-        databus.buildProtoObject(protoFilename, name)
+        this._cbusCore.buildProtoObject(protoFilename, name)
           .then((Msg) => {
             try {
               const decodedMsg = Msg.decode(bb)
@@ -336,7 +344,7 @@
         }
 
         //console.log('postProto cmd:' + cmd + ', file:' + protoFilename + ', request:' + protoRequest + ', response:' + protoRequest)
-        databus.requestOnce(cmd, protoFilename, protoRequest, protoResponse, {
+        this._cbusCore.requestOnce(cmd, protoFilename, protoRequest, protoResponse, {
           fillRequest: function (request) {
             Object.assign(request, requestObj)
           },
@@ -347,7 +355,9 @@
             console.error(err)
             return reject(err)
           }
-        })
+        }).catch(err => {
+          console.log('request once error', err);
+        });
       })
     }
 
@@ -358,8 +368,33 @@
      */
     startHeartBeat() {
       this.closeHeartBeat()
+
+      let heartbeatSuccessCount = 0;
+      let heartbeatFailedCount = 0;
+      let isOpening = false;
+
+      const handleHeartbeatSuccess = () => {
+        ++heartbeatSuccessCount;
+        console.log('recved heartbeat, count:' + heartbeatSuccessCount);
+      }
+
+      const handleHeartbeatError = () => {
+        ++heartbeatFailedCount;
+        console.log('heartbeat failed, count:' + heartbeatFailedCount + ', isOpening:' + isOpening);
+        if (!isOpening && heartbeatFailedCount >= 3) {
+          heartbeatFailedCount = 0;
+          isOpening = true;
+          this.open(this._wsurlList, this._subscribeList).then(() => {
+            isOpening = false;
+          }).catch(() => {
+            isOpening = false;
+          })
+        }
+      }
+
       this._heartBeatTimer = setInterval(() => {
         if (this.readyState() !== 1) {
+          handleHeartbeatError('readystate is not open, readyState:' + this.readyState);
           return
         }
 
@@ -370,9 +405,9 @@
           sendqueue: 0,
           receivequeue: 0
         }).then(() => {
-          console.log('recv heartbeat');
+          handleHeartbeatSuccess();
         }).catch((err) => {
-          console.log('post heartbeat error', err)
+          handleHeartbeatError(err);
         })
       }, this._hearBeatIntervalSecond * 1000)
     }
@@ -386,6 +421,19 @@
       if (this._heartBeatTimer) {
         clearInterval(this._heartBeatTimer)
       }
+    }
+
+    /**
+     * 
+     * 轮询挑选一个url 
+     * @returns 
+     * @memberof AppClient
+     */
+    pickUrl() {
+      let newIndex = this._wsurlList.indexOf(this._lastConnectUrl) + 1;
+      newIndex = (newIndex < this._wsurlList.length) ? newIndex : 0;
+      this._lastConnectUrl = this._wsurlList[newIndex];
+      return this._lastConnectUrl;
     }
 
     /**
@@ -418,7 +466,7 @@
         this._publishCallback(data);
       } else {
         data.old = false;
-        return databus.buildProtoObject(this._cmdParse.getProtoFilename(proto.request), proto.request).then(Msg => {
+        return this._cbusCore.buildProtoObject(this._cmdParse.getProtoFilename(proto.request), proto.request).then(Msg => {
           try {
             data.content = Msg.decode(content)
             this._publishCallback(data);
@@ -441,10 +489,6 @@
         .substring(1);
     }
     return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
-  }
-
-  const CmdParse = function () {
-    this.commandCache = {}
   }
 
   CmdParse.prototype.getCommandFromProto = function (proto_request, proto_response) {
@@ -517,5 +561,5 @@
     return ''
   }
 
-  return new AppClient(new CmdParse());
+  return new AppClient();
 });

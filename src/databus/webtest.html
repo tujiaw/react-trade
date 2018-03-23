@@ -26,27 +26,14 @@
 
     btn.onclick = function () {
       cbus.open('ws://47.100.7.224:55555', [
-            'StockServer.StockDataRequest, StockServer.StockDataResponse',
-            'Trade.TradingAccount, MsgExpress.CommonResponse',
-            'Trade.MarketData, MsgExpress.CommonResponse',
-            'Trade.Position, MsgExpress.CommonResponse',
-            'Trade.Order, MsgExpress.CommonResponse',
-            'Trade.Trade, MsgExpress.CommonResponse',
-            'Trade.ErrorInfo, MsgExpress.CommonResponse'
-        ])
-        .then((json) => {
-          return cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
-            userid: 'admin',
-            passwd: 'admin',
-            instruments: ['IC1803', 'IF1803', 'IH1803', 'I1805']
-          })
-        })
-        .then((json) => {
-          console.log('login trade', json)
-        })
-        .catch((err) => {
-          console.log(JSON.stringify(err))
-        })
+        'HelloServer.HelloSub, MsgExpress.CommonResponse',
+      ])
+      .then(json => {
+        console.log('----------');
+      })
+      .catch((err) => {
+        console.log(JSON.stringify(err))
+      })
     }
   </script>
 </body>
