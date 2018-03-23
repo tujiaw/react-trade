@@ -12,10 +12,10 @@
   else
     global["CBusCore"] = factory(global.protobuf, global.dcodeIO.ByteBuffer, global.pako);
 })(this, function (ProtoBuf, ByteBuffer, pako) {
-  var global = this; // 当前环境
-  var g_serial = 65536; // 发送消息的起始序号
-  var g_protobufBuilders = {}; // protobuf解析缓存
-  var PREFIX_DATABUS = "DATABUS"; // 消息发送序号前缀
+  var global = this;                        // 当前环境
+  var g_serial = 65536;                     // 发送消息的起始序号
+  var g_protobufBuilders = {};              // protobuf解析缓存
+  var PREFIX_DATABUS = "DATABUS";           // 消息发送序号前缀
 
   /**
    * 暂存发送的消息，当消息发送时存储，收到消息后执行然后删除
@@ -24,8 +24,8 @@
    */
   class Observer {
     constructor() {
-      this.responseTimeout = 0; // 应答超时时间
-      this.subscribers = {}; // 订阅者对象
+      this.responseTimeout = 10;            // 应答超时时间
+      this.subscribers = {};                // 订阅者对象
 
       this.timeoutCheckerId = setInterval(() => {
         const curTime = new Date().getTime();

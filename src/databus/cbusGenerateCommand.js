@@ -1,7 +1,6 @@
 var fs = require('fs'),
   xml2js = require('xml2js');
 
-
 let template = `(function(global, factory) {
   if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
     module['exports'] = (function() {
@@ -17,7 +16,6 @@ let template = `(function(global, factory) {
 });`
 
 const parser = new xml2js.Parser();
-
 const xmlContent = fs.readFileSync(__dirname + '/Command.xml');
 parser.parseString(xmlContent, function (err, result) {
   if (err) {

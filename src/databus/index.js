@@ -13,33 +13,32 @@
   }
   const cmdParse = new CmdParse();
 
-  class AppClient {
+  class ClientBus {
     constructor() {
-      this._cbusCore = new CBusCore()
-      this._cmdParse = cmdParse
-      this._wsurlList = []
-      this._lastConnectUrl = ''
-      this._subscribeList = []
-      this._publishCallback = null
-      this._subIdStart = 123
-      this._clientName = 'test'
-      this._heartBeatTimer = 0
-      this._hearBeatIntervalSecond = 5 // 心跳间隔5秒
-      this._sendqueue = 0
-      this._receivequeue = 0
-      this._event = {
+      this._cbusCore = new CBusCore()       // 通信核心
+      this._cmdParse = cmdParse             // command解析
+      this._wsurlList = []                  // 连接地址列表
+      this._lastConnectUrl = ''             // 最后一次连接的地址
+      this._subscribeList = []              // 订阅列表
+      this._publishCallback = null          // 推送消息回调
+      this._subIdStart = 123                // 订阅ID的起始值
+      this._clientName = 'test'             // 客户端名字
+      this._heartBeatTimer = 0              // 心跳ID
+      this._hearBeatIntervalSecond = 5      // 心跳间隔5秒
+      this._sendqueue = 0                   // 发送的消息数
+      this._receivequeue = 0                // 接收的消息树
+      this._event = {                       // 网络事件回调
         onConnectSuccess: () => {},
         onConnectClose: () => {},
         onConnectError: () => {}
       }
-      this.setResponseTimeoutSecond()
     }
 
     /**
      * 设置客户端名称，作为登录的信息
      * 
      * @param {string} name 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     setClientName(name) {
       this._clientName = name
@@ -49,7 +48,7 @@
      * 设置心跳间隔时间秒数
      * 
      * @param {number} second 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     setHeartBeatIntervalSecond(second) {
       this._hearBeatIntervalSecond = second
@@ -59,7 +58,7 @@
      * 设置proto文件所在目录，默认在同级目录下的protobuf目录
      * 
      * @param {string} dir 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     setProtoFileDir(dir) {
       this._cbusCore.setProtoFileDir(dir)
@@ -69,7 +68,7 @@
      * react native需要将proto文件转换为json给protobufjs使用（非react native不需要调用此接口）
      * 
      * @param {array} jsonObjList [{name: name, json: require('./protobuf/msgexpress.json')}]
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     initProtoJson(jsonObjList) {
       jsonObjList.forEach(item => {
@@ -83,7 +82,7 @@
      * 设置应答超时
      * 
      * @param {number} [second=10] 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     setResponseTimeoutSecond(second = 10) {
       this._cbusCore.setResponseTimeoutSecond(second);
@@ -95,7 +94,7 @@
      * @param {() => {})} onopen 网络连接成功回调
      * @param {(event) => {})} onclose 网络关闭回调
      * @param {(event) => {})} onerror 网络出错回调
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     setEvent(onopen, onclose, onerror) {
       if (onopen && typeof onopen !== 'function') {
@@ -116,7 +115,7 @@
      * 设置推送回调
      * 
      * @param {function} onpublish = function({ topic: '', request: '', response: '', old: false, content: {}}) {}
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     setPublish(onpublish) {
       if (typeof onpublish !== 'function') {
@@ -126,13 +125,13 @@
     }
 
     /**
-     * 创建一个新的对象
+     * 创建一个新的连接对象
      * 
      * @returns 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     newBus() {
-      return new AppClient();
+      return new ClientBus();
     }
 
     /**
@@ -142,13 +141,16 @@
      * @param {string | number} wsport 端口
      * @param {string} [wspath=''] 路径
      * @returns Promise
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     open(wsurl, subcribeList) {
       const self = this;
       this._wsurlList = isArray(wsurl) ? wsurl : [wsurl];
       this._subscribeList = subcribeList || [];
 
+      /**
+       * 连接总线，登录总线，订阅
+       */
       const go = () => {
         return new Promise((resolve, reject) => {
           this._cbusCore.connect(this.pickUrl(), {
@@ -190,9 +192,15 @@
         })
       }
 
+      /**
+       * 递归调用IP列表进行登录
+       * 
+       * @param {number} failedCount 
+       * @param {string} failedMsg 
+       */
       const loop = (failedCount, failedMsg) => {
         self._cbusCore.close();
-        if (failedCount === self._wsurlList.length) {
+        if (failedCount >= self._wsurlList.length) {
           return Promise.reject(failedMsg);
         } else {
           return go().then(() => {
@@ -210,7 +218,7 @@
      * 获取网络连接状态
      * 
      * @returns number 0(CONNECTING), 1(OPEN）, 2(CLOSING), 3(CLOSED)
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     readyState() {
       return this._cbusCore.readyState()
@@ -219,7 +227,7 @@
     /**
      * 关闭心跳和连接
      * 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     close() {
       this.closeHeartBeat()
@@ -230,7 +238,7 @@
      * 登录总线，open成功后会自动登录，一般情况下用户不需要调用
      * 
      * @returns promise MsgExpress.LoginResponse
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     loginBus() {
       const loginData = {
@@ -241,7 +249,6 @@
         starttime: new Date().getTime(),
         auth: 'test'
       }
-      console.log('login info', loginData);
       return this.post('MsgExpress.LoginInfo', 'MsgExpress.LoginResponse', loginData)
     }
 
@@ -251,7 +258,7 @@
      * @param {array} protoList 请求和应答用逗号分隔，number表示老的订阅方式，['Trade.Trade, MsgExpress.CommonResponse', 267386881]
      * @param {(data) => {}} publishCallback data={topic: string, request: string, response: string, old: bool, content: jsonObject}
      * @returns promise MsgExpress.CommonResponse
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     subscribe(protoList) {
       return this._cbusCore.buildProtoObject("msgexpress", "MsgExpress.SubscribeData").then(obj => {
@@ -289,7 +296,7 @@
      * @param {string} protoFilename proto的名字
      * @param {object} jsonContent 老的方式推送的消息
      * @returns promise protobuf解析后的消息
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     parseOldPublishMessage(protoFilename, jsonContent) {
       // const msgExpress = {
@@ -333,7 +340,7 @@
      * @param {string} protoResponse 应答协议名
      * @param {object} requestObj 请求传入的数据，结构对应请求的协议名
      * @returns promise protoResponse对应的结构
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     post(protoRequest, protoResponse, requestObj) {
       return this.postProto(this._cmdParse.getProtoFilename(protoRequest), protoRequest, protoResponse, requestObj)
@@ -347,7 +354,7 @@
      * @param {any} protoResponse 应答协议名
      * @param {any} requestObj 请求传入的数据，结构对应请求的协议名
      * @returns promise protoResponse对应的结构
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     postProto(protoFilename, protoRequest, protoResponse, requestObj) {
       const self = this;
@@ -380,14 +387,19 @@
     /**
      * 开启心跳，默认会开启，用户不需要调用
      * 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     startHeartBeat() {
       this.closeHeartBeat()
 
+      // 心跳失败次数
       let heartbeatFailedCount = 0;
+      // 正在登录中
       let isOpening = false;
 
+      /**
+       * 处理心跳失败，如果失败3次则进行重连
+       */
       const handleHeartbeatError = () => {
         ++heartbeatFailedCount;
         console.log('heartbeat failed, count:' + heartbeatFailedCount + ', isOpening:' + isOpening);
@@ -402,6 +414,9 @@
         }
       }
 
+      /**
+       * 开始心跳Timer
+       */
       this._heartBeatTimer = setInterval(() => {
         if (this.readyState() !== 1) {
           handleHeartbeatError('readystate is not open, readyState:' + this.readyState);
@@ -416,7 +431,10 @@
           receivequeue: this._receivequeue
         }
 
-        console.log('heartbeat', data);
+        if (this._sendqueue % 10 === 0) {
+          console.log('heartbeat', data);
+        }
+        
         this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", data).then(() => {
         }).catch((err) => {
           handleHeartbeatError(err);
@@ -427,7 +445,7 @@
     /**
      * 关闭心跳
      * 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     closeHeartBeat() {
       if (this._heartBeatTimer) {
@@ -439,7 +457,7 @@
      * 
      * 轮询挑选一个url 
      * @returns 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     pickUrl() {
       let newIndex = this._wsurlList.indexOf(this._lastConnectUrl) + 1;
@@ -454,7 +472,7 @@
      * @param {string} topic 
      * @param {object} content 
      * @returns 
-     * @memberof AppClient
+     * @memberof ClientBus
      */
     dispatchPublishMessage(topic, content) {
       if (!this._publishCallback) {
@@ -472,7 +490,7 @@
       data.request = proto.request;
       data.response = proto.response;
       if (isArray(content)) {
-        // 老协议，如果定义了proto可以调用appClient.parsePublishMessage解析，否则用户自己去根据key-value解析
+        // 老协议，如果定义了proto可以调用ClientBus.parsePublishMessage解析，否则用户自己去根据key-value解析
         data.old = true;
         data.content = content;
         this._publishCallback(data);
@@ -573,5 +591,5 @@
     return ''
   }
 
-  return new AppClient();
+  return new ClientBus();
 });

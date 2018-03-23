@@ -70,10 +70,7 @@ class App extends Component {
   }
 
   onRepeat = () => {
-    if (this.timerId) {
-      clearInterval(this.timerId);
-    }
-
+    this.timerId && clearInterval(this.timerId);
     this.timerId = setInterval(() => {
       this.onHello();
     }, this.state.repeatValue);

@@ -1,6 +1,23 @@
-# web使用方式
-可以看webtest.html demo   
-直接将databus目录拷贝到tomcat中webapps目录下，在浏览器上访问http://localhost:8080/databus/webtest.html，点击登录按钮弹出success表示成功，也可以看控制台日志
+这是总线库的JavaScript客户端版本，通过WebSocket实现了JavaScript与总线之间的连接，通过总线可以很方便与各后台服务进行通信。其中包括收发消息，订阅消息，断线重连以及支持多IP。
+
+支持如下三种环境:
+* browsers
+* react
+* react-native
+
+# 准备工作
+生成cbusCommand.js文件  
+执行cbusGenerateCommand.js做两件事情：
+1. 将Command.xml转换为json写入cbusCommand.js;
+2. 读取protobuf目录下的.proto文件将package名字和proto文件名映射关系写入cbusCommand.js  
+node执行js，如：
+```
+node cbusGenerateCommand.js
+```
+
+# browsers使用方式
+参考webtest.html示例  
+直接将databus目录拷贝到tomcat中webapps目录下，在浏览器上访问http://localhost:8080/databus/webtest.html，点击open按钮创建连接初始化信息，点击hello按钮发送消息。浏览器上正确显示日志表示成功。
 
 # react使用方式
 ## 安装依赖库
@@ -13,48 +30,33 @@
 "xml2js": "^0.4.19",
 ```
 
-## 生成Command.js文件
-执行cbusGenerateCommand.js做两件事情：
-1. 将Command.xml转换为json写入cbusCommand.js;
-2. 读取protobuf目录下的.proto文件将package名字和proto文件名映射关系写入cbusCommand.js  
-node执行js，如：
-```
-node cbusGenerateCommand.js
-```
-
-## 使用
+## 使用代码片段
 使用databus/index.js中AppClient类就可以了
 ```
-import appClient from '../databus'
+import cbus from '../databus'
 
 // 设置推送回调
 cbus.setPublish((data) => {
-  this.setState({ publishCount: this.state.publishCount + 1 });
-  console.log('on publish:' + data.request);
-  const ls = [...this.state.result]
-  ls.push('publish msg, ' + JSON.stringify(data.content))
-  this.setState({ result: ls })
+  console.log(data);
 })
 
 // 打开连接（内部会自动登录总线和订阅）
-cbus.open('ws://47.100.7.224:55555', [
-  'HelloServer.HelloSub, MsgExpress.CommonResponse',
-])
-.then(json => {
-  console.log('----------');
-})
-.catch((err) => {
+// 支持多IP，也可以传入单个IP，如：'ws://172.16.66.87:1111'
+cbus.open(
+  ['ws://172.16.66.87:1111', 'ws://172.16.66.87:8888'], 
+  ['HelloServer.HelloSub, MsgExpress.CommonResponse',]
+).then(json => {
+  console.log('open', json);
+}).catch((err) => {
   console.log(JSON.stringify(err))
 })
 
 // 发送消息
 cbus.post('HelloServer.HelloReq', 'HelloServer.HelloRsp', {
   name: 'hello'
-})
-.then((json) => {
+}).then((json) => {
   console.log(json);
-})
-.catch((err) => {
+}).catch((err) => {
   console.log(err)
 })
 ```
@@ -63,6 +65,10 @@ cbus.post('HelloServer.HelloReq', 'HelloServer.HelloRsp', {
 与react基本相同，区别在于：
 * react native中protobufjs要用6.7.0老版本的，否则enum会出错  
 * 使用protobufjs提供的命令行将proto文件转换为json文件，然后调用databus的initProtoJson接口初始化  
+
+```
+pbjs -t json file1.proto file2.proto > bundle.json
+```
 > 原因是：react native中protobufjs没办法直接读取proto文件
 
 
