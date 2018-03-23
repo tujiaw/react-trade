@@ -577,7 +577,7 @@
       }
     }
     console.error('getProtoFromCommand error, cmd:' + cmd)
-    return 0;
+    return undefined;
   }
   CmdParse.prototype.getProtoFilename = function (proto) {
     const prefix = proto.substring(0, proto.indexOf('.'))
