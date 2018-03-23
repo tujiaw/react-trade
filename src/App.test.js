@@ -1,10 +1,8 @@
+var Hello = require('./Hello');
 
-const start = new Date().getTime();
+const h = new Hello();
+h.output();
 
-function test(a) {
-  const x = a || false;
-  console.log(x)
-}
-
-test();
-test(true)
+const h2 = new Hello();
+h2.setName('ddddddddd');
+h2.output();

@@ -11,7 +11,6 @@ class App extends Component {
   }
 
   componentDidMount() {
-    cbus.setHeartBeatIntervalSecond(10)
     cbus.setEvent(
       function onopen() {
         console.log('on open', new Date().toLocaleTimeString());
@@ -32,7 +31,7 @@ class App extends Component {
     })
 
     cbus.open(
-      ['ws://172.16.66.187:1111', 'ws://172.16.66.87:1111'], 
+      ['ws://172.16.66.87:1111', 'ws://172.16.66.87:1111'],
       ['HelloServer.HelloSub, MsgExpress.CommonResponse']
     ).then(json => {
       console.log(json);
@@ -58,7 +57,7 @@ class App extends Component {
       name: '' + startTime
     })
     .then((json) => {
-      const serverRecvTime = parseInt(json.content);
+      const serverRecvTime = parseInt(json.content, 10);
       const endTime = new Date().getTime();
       json.content = `server recv cost: ${endTime - serverRecvTime}ms, total cost: ${endTime - startTime}ms`
       const ls = [...this.state.result]

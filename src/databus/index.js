@@ -25,10 +25,12 @@
       this._clientName = 'test'
       this._heartBeatTimer = 0
       this._hearBeatIntervalSecond = 5 // 心跳间隔5秒
+      this._sendqueue = 0
+      this._receivequeue = 0
       this._event = {
         onConnectSuccess: () => {},
         onConnectClose: () => {},
-        onConnectError: () => {},
+        onConnectError: () => {}
       }
       this.setResponseTimeoutSecond()
     }
@@ -96,6 +98,15 @@
      * @memberof AppClient
      */
     setEvent(onopen, onclose, onerror) {
+      if (onopen && typeof onopen !== 'function') {
+        throw new TypeError('onopen must be a function');
+      }
+      if (onclose && typeof onclose !== 'function') {
+        throw new TypeError('onclose must be a function');
+      }
+      if (onerror && typeof onerror !== 'function') {
+        throw new TypeError('onerror must be a function');
+      }
       this._event.onConnectSuccess = onopen;
       this._event.onConnectClose = onclose;
       this._event.onConnectError = onerror;
@@ -108,6 +119,9 @@
      * @memberof AppClient
      */
     setPublish(onpublish) {
+      if (typeof onpublish !== 'function') {
+        throw new TypeError('onpublish must be a function');
+      }
       this._publishCallback = onpublish;
     }
 
@@ -117,7 +131,7 @@
      * @returns 
      * @memberof AppClient
      */
-    create() {
+    newBus() {
       return new AppClient();
     }
 
@@ -145,22 +159,22 @@
                 self.dispatchPublishMessage(topic, content)
               });
               self.loginBus().then((json) => {
-                if (self._subscribeList.length === 0) {
-                  return resolve(json);
-                } else {
-                  self.subscribe(self._subscribeList).then(json => {
-                    if (json.retcode === 0) {
-                      return resolve(json);
-                    }
-                    return reject((json.msg && json.msg.length) ? json.msg : 'subscribe failed');
-                  }).catch(err => {
-                    return reject(err);
-                  })
-                }
-              })
-              .catch((err) => {
-                return reject(err)
-              })
+                  if (self._subscribeList.length === 0) {
+                    return resolve(json);
+                  } else {
+                    self.subscribe(self._subscribeList).then(json => {
+                      if (json.retcode === 0) {
+                        return resolve(json);
+                      }
+                      return reject((json.msg && json.msg.length) ? json.msg : 'subscribe failed');
+                    }).catch(err => {
+                      return reject(err);
+                    })
+                  }
+                })
+                .catch((err) => {
+                  return reject(err)
+                })
             },
             onConnectError: function (err) {
               self._cbusCore.setConnectOptions(self._event);
@@ -336,6 +350,7 @@
      * @memberof AppClient
      */
     postProto(protoFilename, protoRequest, protoResponse, requestObj) {
+      const self = this;
       return new Promise((resolve, reject) => {
         const cmd = this._cmdParse.getCommandFromProto(protoRequest, protoResponse)
         if (!cmd) {
@@ -343,16 +358,17 @@
           return reject('command error, request:' + protoRequest + ', response:' + protoResponse)
         }
 
+        ++self._sendqueue;
         //console.log('postProto cmd:' + cmd + ', file:' + protoFilename + ', request:' + protoRequest + ', response:' + protoRequest)
         this._cbusCore.requestOnce(cmd, protoFilename, protoRequest, protoResponse, {
           fillRequest: function (request) {
             Object.assign(request, requestObj)
           },
           handleResponse: function (response) {
+            ++self._receivequeue;
             return resolve(response)
           },
           handlerError: function (err) {
-            console.error(err)
             return reject(err)
           }
         }).catch(err => {
@@ -369,14 +385,8 @@
     startHeartBeat() {
       this.closeHeartBeat()
 
-      let heartbeatSuccessCount = 0;
       let heartbeatFailedCount = 0;
       let isOpening = false;
-
-      const handleHeartbeatSuccess = () => {
-        ++heartbeatSuccessCount;
-        console.log('recved heartbeat, count:' + heartbeatSuccessCount);
-      }
 
       const handleHeartbeatError = () => {
         ++heartbeatFailedCount;
@@ -398,14 +408,16 @@
           return
         }
 
-        this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", {
+        const data = {
           cpu: 0,
           topmemory: 0,
           memory: 0,
-          sendqueue: 0,
-          receivequeue: 0
-        }).then(() => {
-          handleHeartbeatSuccess();
+          sendqueue: this._sendqueue,
+          receivequeue: this._receivequeue
+        }
+
+        console.log('heartbeat', data);
+        this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", data).then(() => {
         }).catch((err) => {
           handleHeartbeatError(err);
         })

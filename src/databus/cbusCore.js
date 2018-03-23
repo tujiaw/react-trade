@@ -24,8 +24,8 @@
    */
   class Observer {
     constructor() {
-      this.responseTimeout = 0;     // 应答超时时间
-      this.subscribers = {};        // 订阅者对象
+      this.responseTimeout = 0; // 应答超时时间
+      this.subscribers = {}; // 订阅者对象
 
       this.timeoutCheckerId = setInterval(() => {
         const curTime = new Date().getTime();
@@ -115,7 +115,7 @@
           delete this.subscribers[id.evt][id.fn];
         }
       } catch (err) {
-        console.log(err);
+        console.log('unsub', err);
       }
     }
   }
@@ -123,7 +123,7 @@
   /**
    * 封包，拆包（包体除外，由protobufjs来处理）
    */
-  const cbusPackage = (function(ByteBuffer, pako) {
+  const cbusPackage = (function (ByteBuffer, pako) {
     var pack = function () {
       this.flag1 = pack.PACKAGE_START;
       this.flag2 = pack.PACKAGE_START;
@@ -350,10 +350,10 @@
    */
   class CBusCore {
     constructor() {
-      this.ws = undefined;                        // WebSocket
-      this.enableReconnect = false;                  // 是否可以进行重连
-      this.pushDataFactory = undefined;           // 处理推送的消息
-      this.PROTO_FILE_DIR = '/protobuf/';         // proto文件所在目录
+      this.ws = undefined; // WebSocket
+      this.enableReconnect = false; // 是否可以进行重连
+      this.pushDataFactory = undefined; // 处理推送的消息
+      this.PROTO_FILE_DIR = '/protobuf/'; // proto文件所在目录
       this.settings = {
         onConnectSuccess: undefined,
         onConnectError: undefined,
@@ -361,7 +361,9 @@
       };
       this.observer = new Observer();
     }
-    
+
+
+
     close() {
       if (this.ws) {
         this.ws.onopen = function () {}
@@ -453,7 +455,7 @@
             }
           }
         }).catch(err => {
-          console.error(err)
+          console.error(err);
         })
       }
 
@@ -478,7 +480,7 @@
        */
       this.ws.onmessage = function (evt) {
         if (typeof (evt.data) === "string") {
-          console.log("Receive String Data");
+          console.log("receive string data");
           return;
         }
 
@@ -487,7 +489,7 @@
           const bb = ByteBuffer.wrap(evt.data, "binary");
           packages = cbusPackage.decodePackage(bb);
         } catch (err) {
-          console.log(err)
+          console.log('decode package', err)
           return;
         }
 
