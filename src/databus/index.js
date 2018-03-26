@@ -15,18 +15,18 @@
 
   class ClientBus {
     constructor() {
-      this._cbusCore = new CBusCore()       // 通信核心
-      this._wsurlList = []                  // 连接地址列表
-      this._lastConnectUrl = ''             // 最后一次连接的地址
-      this._subscribeList = []              // 订阅列表
-      this._publishCallback = null          // 推送消息回调
-      this._subIdStart = 123                // 订阅ID的起始值
-      this._clientName = 'test'             // 客户端名字
-      this._heartBeatTimer = 0              // 心跳ID
-      this._hearBeatIntervalSecond = 5      // 心跳间隔5秒
-      this._sendqueue = 0                   // 发送的消息数
-      this._receivequeue = 0                // 接收的消息树
-      this._event = {                       // 网络事件回调
+      this._cbusCore = new CBusCore() // 通信核心
+      this._wsurlList = [] // 连接地址列表
+      this._lastConnectUrl = '' // 最后一次连接的地址
+      this._subscribeList = [] // 订阅列表
+      this._publishCallback = null // 推送消息回调
+      this._subIdStart = 123 // 订阅ID的起始值
+      this._clientName = 'test' // 客户端名字
+      this._heartBeatTimer = 0 // 心跳ID
+      this._hearBeatIntervalSecond = 5 // 心跳间隔5秒
+      this._sendqueue = 0 // 发送的消息数
+      this._receivequeue = 0 // 接收的消息树
+      this._event = { // 网络事件回调
         onConnectSuccess: () => {},
         onConnectClose: () => {},
         onConnectError: () => {}
@@ -143,6 +143,13 @@
      * @memberof ClientBus
      */
     open(wsurl, subcribeList) {
+      if (!isString(wsurl) && !isArray(wsurl)) {
+        throw new TypeError('wsurl must be an array or string!')
+      }
+      if (subcribeList && !isArray(subcribeList)) {
+        throw new TypeError('subcribeList must be an array!')
+      }
+
       const self = this;
       this._wsurlList = isArray(wsurl) ? wsurl : [wsurl];
       this._subscribeList = subcribeList || [];
@@ -433,9 +440,8 @@
         if (this._sendqueue % 10 === 0) {
           console.log('heartbeat', data);
         }
-        
-        this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", data).then(() => {
-        }).catch((err) => {
+
+        this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", data).then(() => {}).catch((err) => {
           handleHeartbeatError(err);
         })
       }, this._hearBeatIntervalSecond * 1000)
@@ -507,19 +513,6 @@
     }
   }
 
-  function isArray(obj) {
-    return Object.prototype.toString.call(obj) === '[object Array]';
-  }
-
-  function guid() {
-    function s4() {
-      return Math.floor((1 + Math.random()) * 0x10000)
-        .toString(16)
-        .substring(1);
-    }
-    return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
-  }
-
   CmdParse.prototype.getCommandFromProto = function (proto_request, proto_response) {
     proto_response = proto_response || 'MsgExpress.CommonResponse'
     const proto_str = proto_request + '-' + proto_response
@@ -588,6 +581,36 @@
     }
     console.error('get proto filename error, proto:' + proto)
     return ''
+  }
+
+  /**
+   * 判断是否是数组
+   * 
+   * @param {any} obj 
+   * @returns 
+   */
+  function isArray(obj) {
+    return Object.prototype.toString.call(obj) === '[object Array]';
+  }
+  /**
+   * 判断是否是字符串
+   * 
+   * @param {any} obj 
+   * @returns 
+   */
+  function isString(obj) {
+    return Object.prototype.toString.call(obj) === "[object String]";
+  }
+  /**
+   * 生成GUID
+   * 
+   * @returns 
+   */
+  function guid() {
+    function s4() {
+      return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+    }
+    return s4() + s4() + '-' + s4() + '-' + s4() + '-' + s4() + '-' + s4() + s4() + s4();
   }
 
   return new ClientBus();
