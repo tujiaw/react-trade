@@ -2,12 +2,12 @@ var fs = require('fs'),
   xml2js = require('xml2js');
 
 let template = `(function(global, factory) {
-  if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
-    module['exports'] = (function() {
-      return factory();
-  })();
-  else
+  // CommonJS, Global
+  if (typeof require === 'function' && typeof module === "object" && module && module["exports"]) {
+    module['exports'] = (function() { return factory(); })();
+  } else {
     global["cbusCommand"] = factory();
+  }
 })(this, function() {
   return {
     AppList: %AppList%,

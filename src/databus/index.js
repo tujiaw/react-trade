@@ -1,12 +1,10 @@
 (function (global, factory) {
-  /* CommonJS */
-  if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
-    module['exports'] = (function () {
-      return factory(require('./cbusCore'), require('./cbusCommand'));
-    })();
-  /* Global */
-  else
-    global["cbus"] = factory(global.CBusCore, global.cbusCommand);
+  // CommonJS, Global
+  if (typeof require === 'function' && typeof module === "object" && module && module["exports"]) {
+    module['exports'] = (function () { return factory(require('./cbusCore'), require('./cbusCommand'));})();
+  } else {
+    global['cbus'] = factory(global.CBusCore, global.cbusCommand);
+  }
 })(this, function (CBusCore, cbusCommand) {
   const CmdParse = function () {
     this.commandCache = {}

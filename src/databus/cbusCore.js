@@ -1,6 +1,6 @@
 (function (global, factory) {
-  /* CommonJS */
-  if (typeof require === 'function' && typeof module === "object" && module && module["exports"])
+  // CommonJS, Global
+  if (typeof require === 'function' && typeof module === "object" && module && module["exports"]) {
     module['exports'] = (function () {
       var ProtoBuf = require("protobufjs");
       var Long = require("long");
@@ -8,9 +8,9 @@
       ProtoBuf.configure();
       return factory(ProtoBuf, require('bytebuffer'), require('pako'));
     })();
-  /* Global */
-  else
+  } else {
     global["CBusCore"] = factory(global.protobuf, global.dcodeIO.ByteBuffer, global.pako);
+  }
 })(this, function (ProtoBuf, ByteBuffer, pako) {
   var global = this;                        // 当前环境
   var g_serial = 65536;                     // 发送消息的起始序号
