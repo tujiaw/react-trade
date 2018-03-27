@@ -601,7 +601,10 @@
         buffer = new Uint8Array(buffer)
         // 包装成ByteBuffer
         var binary = ByteBuffer.wrap(buffer, "binary");
-        return this.sendmsg(cmd, binary, proto_package, proto_response, callback, false);
+        if (!this.sendmsg(cmd, binary, proto_package, proto_response, callback, false)) {
+          return Promise.reject('send msg failed');
+        }
+        return Promise.resolve();
       })
     }
 
@@ -613,42 +616,44 @@
         pack = cbusPackage.encodePackage(serialnum, cmd, byteBuffer);
       } catch (err) {
         console.error(serialnum, cmd, err)
-        return Promise.reject(err);
+        return false;
       }
 
-      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-        if (forever === undefined || !forever) {
-          const self = this
-          this.subscribeInfo(PREFIX_DATABUS, serialnum, function (info, iserror) {
-            if (iserror === undefined || !iserror) { // 处理应答
-              self.buildProtoObject(proto_package, proto_response).then(obj => {
+      if (!(this.ws && this.ws.readyState === WebSocket.OPEN)) {
+        console.error('ready state is not open')
+        return false;
+      }
+
+      if (forever === undefined || !forever) {
+        const self = this
+        this.subscribeInfo(PREFIX_DATABUS, serialnum, function (info, iserror) {
+          if (iserror === undefined || !iserror) { // 处理应答
+            self.buildProtoObject(proto_package, proto_response).then(obj => {
+              try {
+                const msg = obj.decode(info.view);
+                callback.handleResponse(msg);
+              } catch (e) {
+                console.error(proto_response, e)
+              }
+            })
+          } else if (callback.handlerError) { // 处理错误
+            if (info instanceof ByteBuffer) {
+              self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
                 try {
                   const msg = obj.decode(info.view);
-                  callback.handleResponse(msg);
+                  callback.handlerError(msg);
                 } catch (e) {
-                  console.error(proto_response, e)
+                  console.error('ErrMessage', e)
                 }
               })
-            } else if (callback.handlerError) { // 处理错误
-              if (info instanceof ByteBuffer) {
-                self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
-                  try {
-                    const msg = obj.decode(info.view);
-                    callback.handlerError(msg);
-                  } catch (e) {
-                    console.error('ErrMessage', e)
-                  }
-                })
-              } else {
-                callback.handlerError(info);
-              }
+            } else {
+              callback.handlerError(info);
             }
-          });
-        }
-        this.ws.send(pack.toArrayBuffer());
-      } else {
-        return Promise.reject('websocket disconnect.')
+          }
+        });
       }
+      this.ws.send(pack.toArrayBuffer());
+      return true;
     }
 
     setPushDataFactory(factory) {

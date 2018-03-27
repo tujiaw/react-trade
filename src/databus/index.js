@@ -15,18 +15,18 @@
 
   class ClientBus {
     constructor() {
-      this._cbusCore = new CBusCore() // 通信核心
-      this._wsurlList = [] // 连接地址列表
-      this._lastConnectUrl = '' // 最后一次连接的地址
-      this._subscribeList = [] // 订阅列表
-      this._publishCallback = null // 推送消息回调
-      this._subIdStart = 123 // 订阅ID的起始值
-      this._clientName = 'test' // 客户端名字
-      this._heartBeatTimer = 0 // 心跳ID
-      this._hearBeatIntervalSecond = 5 // 心跳间隔5秒
-      this._sendqueue = 0 // 发送的消息数
-      this._receivequeue = 0 // 接收的消息树
-      this._event = { // 网络事件回调
+      this._cbusCore = new CBusCore()         // 通信核心
+      this._wsurlList = []                    // 连接地址列表
+      this._lastConnectUrl = ''               // 最后一次连接的地址
+      this._subscribeList = []                // 订阅列表
+      this._publishCallback = null            // 推送消息回调
+      this._subIdStart = 123                  // 订阅ID的起始值
+      this._clientName = 'test'               // 客户端名字
+      this._heartBeatTimer = 0                // 心跳ID
+      this._hearBeatIntervalSecond = 5        // 心跳间隔5秒
+      this._sendqueue = 0                     // 发送的消息数
+      this._receivequeue = 0                  // 接收的消息数
+      this._event = {                         // 网络事件回调
         onConnectSuccess: () => {},
         onConnectClose: () => {},
         onConnectError: () => {}
@@ -384,8 +384,8 @@
           handlerError: function (err) {
             return reject(err)
           }
-        }).catch(err => {
-          console.log('request once error', err);
+        }).then(() => {}).catch(err => {
+          return reject(err);
         });
       })
     }
@@ -406,9 +406,9 @@
       /**
        * 处理心跳失败，如果失败3次则进行重连
        */
-      const handleHeartbeatError = () => {
+      const handleHeartbeatError = (err) => {
         ++heartbeatFailedCount;
-        console.log('heartbeat failed, count:' + heartbeatFailedCount + ', isOpening:' + isOpening);
+        console.error(`heartbeat failed, count:${heartbeatFailedCount}, isOpening:${isOpening}, err:${err}`);
         if (!isOpening && heartbeatFailedCount >= 3) {
           heartbeatFailedCount = 0;
           isOpening = true;
@@ -441,7 +441,13 @@
           console.log('heartbeat', data);
         }
 
-        this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", data).then(() => {}).catch((err) => {
+        this.post("MsgExpress.HeartBeat", "MsgExpress.HeartBeatResponse", data).then((json) => {
+          if (json.retcode === 0) {
+            heartbeatFailedCount = 0;
+          } else {
+            console.log('heartbeat response failed', json);
+          }
+        }).catch((err) => {
           handleHeartbeatError(err);
         })
       }, this._hearBeatIntervalSecond * 1000)
