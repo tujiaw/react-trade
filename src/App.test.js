@@ -1,8 +1,16 @@
-var Hello = require('./Hello');
 
-const h = new Hello();
-h.output();
 
-const h2 = new Hello();
-h2.setName('ddddddddd');
-h2.output();
+function first() {
+    return new Promise((resolve, reject) => {
+        return resolve('first');
+    })
+}
+
+function second() {
+    return first().then(json => {
+        console.log(json)
+        return Promise.resolve('second')
+    })
+}
+
+second()

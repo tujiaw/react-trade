@@ -36,7 +36,7 @@
           for (let i = 0; i < fnCount; i++) {
             const fnObj = this.subscribers[key][i]
             if (fnObj) {
-              if (this.responseTimeout > 0 && (curTime - fnObj.time > this.responseTimeout * 1000)) {
+              if (this.responseTimeout > 0 && (curTime - fnObj.time >= this.responseTimeout * 1000)) {
                 fnObj.fn('timeout', true);
               }
             } else {
@@ -48,7 +48,7 @@
             delete this.subscribers[key];
           }
         }
-      }, 1000);
+      }, 2000);
     }
     setResponseTimeoutSecond(second) {
       this.responseTimeout = second;
@@ -75,6 +75,7 @@
       const fnNumber = this.subscribers[evt].length - 1;
       return '{"evt":"' + evt + '","fn":"' + fnNumber + '"}';
     }
+
     /**
      * 响应应答，执行回调
      * 
@@ -601,7 +602,7 @@
         buffer = new Uint8Array(buffer)
         // 包装成ByteBuffer
         var binary = ByteBuffer.wrap(buffer, "binary");
-        if (!this.sendmsg(cmd, binary, proto_package, proto_response, callback, false)) {
+        if (!this.sendmsg(cmd, binary, proto_package, proto_response, callback)) {
           return Promise.reject('send msg failed');
         }
         return Promise.resolve();
@@ -609,7 +610,7 @@
     }
 
     // 序列化整个包，设置应答回调，发送消息
-    sendmsg(cmd, byteBuffer, proto_package, proto_response, callback, forever) {
+    sendmsg(cmd, byteBuffer, proto_package, proto_response, callback) {
       var serialnum = g_serial++;
       var pack;
       try {
@@ -624,34 +625,32 @@
         return false;
       }
 
-      if (forever === undefined || !forever) {
-        const self = this
-        this.subscribeInfo(PREFIX_DATABUS, serialnum, function (info, iserror) {
-          if (iserror === undefined || !iserror) { // 处理应答
-            self.buildProtoObject(proto_package, proto_response).then(obj => {
+      const self = this
+      this.subscribeInfo(PREFIX_DATABUS, serialnum, function (info, iserror) {
+        if (iserror === undefined || !iserror) { // 处理应答
+          self.buildProtoObject(proto_package, proto_response).then(obj => {
+            try {
+              const msg = obj.decode(info.view);
+              callback.handleResponse(msg);
+            } catch (e) {
+              console.error(proto_response, e)
+            }
+          })
+        } else if (callback.handlerError) { // 处理错误
+          if (info instanceof ByteBuffer) {
+            self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
               try {
                 const msg = obj.decode(info.view);
-                callback.handleResponse(msg);
+                callback.handlerError(msg);
               } catch (e) {
-                console.error(proto_response, e)
+                console.error('ErrMessage', e)
               }
             })
-          } else if (callback.handlerError) { // 处理错误
-            if (info instanceof ByteBuffer) {
-              self.buildProtoObject("msgexpress", "MsgExpress.ErrMessage").then(obj => {
-                try {
-                  const msg = obj.decode(info.view);
-                  callback.handlerError(msg);
-                } catch (e) {
-                  console.error('ErrMessage', e)
-                }
-              })
-            } else {
-              callback.handlerError(info);
-            }
+          } else {
+            callback.handlerError(info);
           }
-        });
-      }
+        }
+      });
       this.ws.send(pack.toArrayBuffer());
       return true;
     }
