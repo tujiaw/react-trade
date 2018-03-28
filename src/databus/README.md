@@ -129,4 +129,3 @@ cbus.open('ws://172.16.66.87:1111', ['HelloServer.HelloSub, MsgExpress.CommonRes
 |500         |1000     |28             |500         |500     |23
 |1000        |1380     |35             |1000        |1400    |15
 
-

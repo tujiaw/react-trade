@@ -1,5 +1,4 @@
 const cbus = require('./databus')
-
 cbus.setPublish(function(data) {
   console.log(data);
 })

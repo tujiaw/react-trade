@@ -11,6 +11,14 @@
   }
   const cmdParse = new CmdParse();
 
+  // 网络连接状态
+  const ReadyState = {
+    CONNECTING: 0,                            // 连接还没开启
+    OPEN: 1,                                  // 连接已开启并准备好进行通信
+    CLOSING: 2,                               // 连接正在关闭的过程中
+    CLOSED: 3                                 // 连接已经关闭，或者连接无法建立
+  }
+
   class ClientBus {
     constructor() {
       this._cbusCore = new CBusCore()         // 通信核心
@@ -400,14 +408,13 @@
       let heartbeatFailedCount = 0;
       // 正在登录中
       let isOpening = false;
-
-      /**
-       * 处理心跳失败，如果失败3次则进行重连
-       */
+      
+      // 处理心跳失败，如果失败3次则进行重连
       const handleHeartbeatError = (err) => {
         ++heartbeatFailedCount;
         console.error(`heartbeat failed, count:${heartbeatFailedCount}, isOpening:${isOpening}, err:${err}`);
-        if (!isOpening && heartbeatFailedCount >= 3) {
+        // 如果没有连接正在打开，并且失败的次数大于等于3或者连接已经关闭，立马重连
+        if (!isOpening && (heartbeatFailedCount >= 3 || this.readyState() === ReadyState.CLOSED)) {
           heartbeatFailedCount = 0;
           isOpening = true;
           this.open(this._wsurlList, this._subscribeList).then(() => {
@@ -418,11 +425,9 @@
         }
       }
 
-      /**
-       * 开始心跳Timer
-       */
+      // 开始心跳Timer
       this._heartBeatTimer = setInterval(() => {
-        if (this.readyState() !== 1) {
+        if (this.readyState() !== ReadyState.OPEN) {
           handleHeartbeatError('readystate is not open, readyState:' + this.readyState);
           return
         }
