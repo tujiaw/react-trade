@@ -403,6 +403,9 @@
         this.ws = new global.WebSocket(wsurl);
       } else if (global.MozWebSocket) {
         this.ws = new global.MozWebSocket(wsurl);
+      } else if (typeof require === 'function') {
+        global.WebSocket = require('websocket').w3cwebsocket;
+        this.ws = new global.WebSocket(wsurl);
       } else {
         console.log("No Support WebSocket..."); // fixme
         return;
@@ -496,6 +499,11 @@
 
         for (let i = 0, count = packages.length; i < count; i++) {
           const p = packages[i];
+          // for nodejs
+          if (!p.body.view && p.body.buffer) {
+            p.body.view = p.body.buffer
+          }
+          
           if (p.getType() === cbusPackage.Publish) {
             if (p.isPublishNewMsg()) {
               if (self.pushDataFactory) {
@@ -620,7 +628,7 @@
         return false;
       }
 
-      if (!(this.ws && this.ws.readyState === WebSocket.OPEN)) {
+      if (!(this.ws && this.ws.readyState === 1)) {
         console.error('ready state is not open')
         return false;
       }

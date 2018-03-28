@@ -72,6 +72,31 @@ pbjs -t json file1.proto file2.proto > bundle.json
 ```
 > 原因是：react native中protobufjs没办法直接读取proto文件
 
+# nodejs使用方法
+安装```npm install websocket --save```  
+```
+const cbus = require('./databus')
+cbus.setPublish(function(data) {
+  console.log(data);
+})
+cbus.setProtoFileDir(__dirname + '/databus/protobuf');
+cbus.open('ws://172.16.66.87:1111', ['HelloServer.HelloSub, MsgExpress.CommonResponse'])
+.then(json => {
+  console.log(json);
+  setInterval(() => {
+    cbus.post('HelloServer.HelloReq', 'HelloServer.HelloRsp', {
+      name: 'nodejs'
+    }).then((json) => {
+      console.log(json);
+    }).catch(err => {
+      console.log(err);
+    })
+  }, 3000);
+}).catch(err => {
+  console.log(err);
+})
+```
+
 # 测试
 ## 推送
 |推送频率(ms) |观察条数  |平均时间(ms)
@@ -95,13 +120,13 @@ pbjs -t json file1.proto file2.proto > bundle.json
 频率200ms，收发消息在369条，推送消息在654条，心跳失败  
 推送500ms，请求200ms，收到应答数2050时，心跳超时  
 
-|推送频率(ms) |推送条数 |推送平均时间 |发送频率(ms) |发送条数 |收发平均时间(ms)
-|:-:         |:-:      |:-:         |:-:         |:-:     |:-:
-|200         |2200     |90          |200         |2400    |109
-|200         |2000     |70          |500         |1000    |126
-|500         |1600     |73          |200         |4000    |90
-|500         |1600     |34          |500         |1000    |16
-|500         |1000     |28          |500         |500     |23
-|1000        |1380     |35          |1000        |1400    |15
+|推送频率(ms) |推送条数 |推送平均时间(ms) |发送频率(ms) |发送条数 |收发平均时间(ms)
+|:-:         |:-:      |:-:            |:-:         |:-:     |:-:
+|200         |2200     |90             |200         |2400    |109
+|200         |2000     |70             |500         |1000    |126
+|500         |1600     |73             |200         |4000    |90
+|500         |1600     |34             |500         |1000    |16
+|500         |1000     |28             |500         |500     |23
+|1000        |1380     |35             |1000        |1400    |15
 
 
