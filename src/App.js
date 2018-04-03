@@ -17,6 +17,7 @@ class App extends Component {
 
     result: [],
     repeatValue: 2000,
+    packSize: 1024
   }
 
   componentDidMount() {
@@ -32,6 +33,7 @@ class App extends Component {
       }
     )
     cbus.setPublish((data) => {
+      console.log('publish', data.content);
       const publishCount = this.state.publishCount + 1;
       const totalCount = this.state.totalCount + 1;
       const ms = new Date().getTime() - parseInt(data.content.str1, 10);
@@ -43,14 +45,28 @@ class App extends Component {
         recvPublishAvgCost: parseInt(recvPublishTotalCost / publishCount, 10),
       });
     })
+    
+    // ['ws://172.16.66.87:1111', 'ws://172.16.66.87:8888'],
+    // cbus.open('ws://47.100.7.224:55555').then(json => {
+    //   this.setState({ tip: json })
+    //   return cbus.post('Trade.LoginReq', 'Trade.LoginResp', {
+    //     userid: 'admin',
+    //     passwd: 'admin',
+    //     instruments: ['IC1803', 'IF1803', 'IH1803', 'i1805']
+    //   })
+    // })
+    // .then(json => {
+    //   console.log('login trade result', json);
+    // })
+    // .catch(err => {
+    //   this.setState({ tip: 'open failed' })
+    // })
 
-    cbus.open(
-      ['ws://172.16.66.87:1111', 'ws://172.16.66.87:8888'],
-      ['HelloServer.HelloSub, MsgExpress.CommonResponse']
-    ).then(json => {
-      this.setState({ tip: json })
+    cbus.setHeartBeatIntervalSecond(100);
+    cbus.open(['ws://172.16.66.87:1111', 'ws://172.16.66.87:8888']).then(json => {
+      this.setState({ tip: json });
     }).catch(err => {
-      this.setState({ tip: 'open failed' })
+      this.setState({ tip: err });
     })
   }
 
@@ -65,13 +81,23 @@ class App extends Component {
   }
 
   onHello = () => {
-    const startTime = new Date().getTime();
     this.setState({ requestCount: this.state.requestCount + 1 });
-    cbus.post('HelloServer.HelloReq', 'HelloServer.HelloRsp', {
-      name: '' + startTime
-    }).then((json) => {
-      const serverRecvTime = parseInt(json.content, 10);
-      const ms = Math.max(new Date().getTime() - serverRecvTime, 0);
+    let str = '';
+    for (let i = 0; i < this.state.packSize; i++) {
+      str += 'A';
+    }
+
+    const startTime = new Date().getTime();
+    cbus.post('HelloServer.HelloReq', 'HelloServer.HelloRsp', { str: str }).then((json) => {
+      const ms = new Date().getTime() - startTime;
+      console.log(`cost:${ms}ms, pack size:${json.str.length}`)
+      if (str === json.str) {
+        console.log('ok')
+      } else {
+        console.log('error');
+      }
+      // const serverRecvTime = parseInt(json.content, 10);
+      // const ms = Math.max(new Date().getTime() - serverRecvTime, 0);
       const responseCount = this.state.responseCount + 1;
       const totalCount = this.state.totalCount + 1;
       const requestResponseTotalCost = this.state.requestResponseTotalCost + ms;
@@ -123,6 +149,9 @@ class App extends Component {
         <button onClick={this.onHello}>发送一条消息</button>
         <button onClick={this.onRepeat}>间隔循环发送(ms)</button>
         <input style={styles.inputInterval} defaultValue={this.state.repeatValue} onChange={(evt) => this.setState({repeatValue: evt.target.value })}
+        ></input>
+        <span>包大小</span>
+        <input style={styles.inputInterval} defaultValue={this.state.packSize} onChange={(evt) => this.setState({packSize: evt.target.value })}
         ></input>
         <br/>
         <button onClick={this.onClose}>关闭总线连接</button>

@@ -233,6 +233,24 @@
   },
   {
     "$": {
+      "id": "264",
+      "name": "RealTimeMarket",
+      "desc": ""
+    },
+    "function": [
+      {
+        "$": {
+          "id": "2",
+          "request": "StockServer.TickData",
+          "response": "MsgExpress.CommonResponse",
+          "ispublish": "true",
+          "desc": ""
+        }
+      }
+    ]
+  },
+  {
+    "$": {
       "id": "888",
       "name": "Trade",
       "desc": ""
@@ -377,6 +395,10 @@
   {
     "filename": "msgexpress",
     "package": "MsgExpress"
+  },
+  {
+    "filename": "stockserver",
+    "package": "StockServer"
   },
   {
     "filename": "trade",

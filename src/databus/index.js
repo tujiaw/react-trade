@@ -35,7 +35,8 @@
       this._event = {                         // 网络事件回调
         onConnectSuccess: () => {},
         onConnectClose: () => {},
-        onConnectError: () => {}
+        onConnectError: () => {},
+        onLoginResult: () => {}
       }
     }
 
@@ -101,7 +102,7 @@
      * @param {(event) => {})} onerror 网络出错回调
      * @memberof ClientBus
      */
-    setEvent(onopen, onclose, onerror) {
+    setEvent(onopen, onclose, onerror, onlogin) {
       if (onopen && typeof onopen !== 'function') {
         throw new TypeError('onopen must be a function');
       }
@@ -111,9 +112,13 @@
       if (onerror && typeof onerror !== 'function') {
         throw new TypeError('onerror must be a function');
       }
-      this._event.onConnectSuccess = onopen;
-      this._event.onConnectClose = onclose;
-      this._event.onConnectError = onerror;
+      if (onlogin && typeof onlogin !== 'function') {
+        throw new TypeError('onlogin must be a function');
+      }
+      onopen && (this._event.onConnectSuccess = onopen);
+      onclose && (this._event.onConnectClose = onclose);
+      onerror && (this._event.onConnectError = onerror);
+      onlogin && (this._event.onLoginResult = onlogin);
     }
 
     /**
@@ -213,10 +218,12 @@
       const loop = (failedCount, failedMsg) => {
         self._cbusCore.close();
         if (failedCount >= self._wsurlList.length) {
+          self._event.onLoginResult(failedMsg);
           return Promise.reject(failedMsg);
         } else {
           return go().then(() => {
             self.startHeartBeat();
+            self._event.onLoginResult('success');
             return Promise.resolve('success');
           }).catch((msg) => {
             return loop(++failedCount, msg);
@@ -510,7 +517,12 @@
         this._publishCallback(data);
       } else {
         data.old = false;
-        return this._cbusCore.buildProtoObject(cmdParse.getProtoFilename(proto.request), proto.request).then(Msg => {
+        const protoName = cmdParse.getProtoFilename(proto.request);
+        if (protoName.length === 0) {
+          return;
+        }
+
+        return this._cbusCore.buildProtoObject(protoName, proto.request).then(Msg => {
           try {
             data.content = Msg.decode(content)
             this._publishCallback(data);

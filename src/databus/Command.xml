@@ -32,6 +32,9 @@
 	  <function id="3" request="StockServer.StockInfoRequest" response="StockServer.StockInfoResponse" desc=""></function>
 	  <function id="4" request="StockServer.NewStockDataRequest" response="StockServer.NewStockDataResponse" desc=""></function>
   </AppServer>
+  <AppServer id="264" name="RealTimeMarket" desc="">
+    <function id="2" request="StockServer.TickData" response="MsgExpress.CommonResponse" ispublish="true" desc=""></function>
+  </AppServer> 
   <AppServer id="888" name="Trade" desc="">
     <function id="1" request="Trade.LoginReq" response="Trade.LoginResp" desc=""></function>
     <function id="2" request="Trade.LogoutReq" response="Trade.LogoutResp" desc=""></function>

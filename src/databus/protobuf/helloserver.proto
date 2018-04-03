@@ -3,15 +3,15 @@ package HelloServer;
 option java_package = "com.sumscope";
 option java_outer_classname = "HelloServer";
 
+
 message HelloReq
 {
-	optional string name = 1;
+	optional string str = 1;
 }
 
 message HelloRsp
 {
-	optional int32 code = 1;
-	optional string content = 2;
+	optional string str = 1;
 }
 
 message HelloSub
